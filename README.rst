@@ -9,8 +9,12 @@ tools for R&D related to fogpy
 Description
 ===========
 
-A longer description of your project goes here...
+Tools for experiments or commandline-scripts related to the development
+of fogpy, that do not fit within fogpy itself.
 
+For fogpy, see https://github.com/pytroll/fogpy .
+
+It is currently (2020) in the early stages of development.
 
 Note
 ====
