@@ -6,7 +6,7 @@ env:
   global:
     - PYTHON_VERSION=$TRAVIS_PYTHON_VERSION
     - MAIN_CMD="pytest"
-    - CONDA_DEPENDENCIES="satpy setuptools pyresample pytest-cov coveralls coverage codecov matplotlib pillow"
+    - CONDA_DEPENDENCIES="satpy setuptools pyresample pytest-cov coveralls coverage codecov matplotlib pillow pandas s3fs pytables"
     - PIP_DEPENDENCIES=""
     - CONDA_CHANNELS="conda-forge"
     - CONDA_CHANNEL_PRIORITY="strict"
