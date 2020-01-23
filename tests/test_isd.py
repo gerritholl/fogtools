@@ -1,6 +1,7 @@
 import os
 import io
 import tempfile
+import logging
 
 import pytest
 import numpy
@@ -38,10 +39,14 @@ def test_get_stations(stations):
     assert len(stations)==29742
     assert stations["END"].max() == pandas.Timestamp("2020-01-15")
     assert stations["BEGIN"].min() == pandas.Timestamp("1901-01-01")
-    assert stations["WBAN"].dtype == stations["USAF"].dtype == numpy.dtype("O")
+    assert (stations["WBAN"].dtype ==
+            stations["USAF"].dtype ==
+            pandas.StringDtype())
     assert (stations["LAT"].dtype == stations["LON"].dtype ==
             stations["ELEV(M)"].dtype == numpy.dtype("f8"))
-    assert stations["BEGIN"].dtype == stations["END"].dtype == numpy.dtype("<M8[ns]")
+    assert (stations["BEGIN"].dtype ==
+            stations["END"].dtype ==
+            numpy.dtype("<M8[ns]"))
 
 def test_select_stations(subset):
     # select_stations get called in fixture
@@ -85,7 +90,10 @@ def test_cache_dir():
         assert d.parent.name == ".cache"
         assert d.name == "fogtools"
     finally:
-        d.rmdir()
+        try:
+            d.rmdir()
+        except OSError:
+            pass
     try:
         _environ = os.environ.copy()
         os.environ["XDG_CACHE_HOME"] = os.environ.get("TMPDIR", "/tmp")
@@ -95,7 +103,10 @@ def test_cache_dir():
         assert str(d.parent) == "/tmp"
         assert d.name == "fogtools"
     finally:
-        d.rmdir()
+        try:
+            d.rmdir()
+        except OSError:
+            pass
         os.environ.clear()
         os.environ.update(_environ)
 
@@ -103,26 +114,30 @@ def test_get_station():
     from fogtools.isd import get_station
     # need to mock/test case in which file supposedly exists
     # and case where it doesn't
-    with mock.patch("pandas.read_hdf", autospec=True) as pr:
+    with mock.patch("pandas.read_feather", autospec=True) as prf:
         get_station(2020, "1234567890")
-        pr.assert_called_once()
+        prf.assert_called_once()
 
-    with mock.patch("pandas.read_hdf", side_effect=FileNotFoundError,
-                    autospec=True) as pr, \
+    with mock.patch("pandas.read_feather", side_effect=FileNotFoundError,
+                    autospec=True) as prf, \
             mock.patch("fogtools.isd.dl_station", autospec=True) as ds:
         get_station(2020, "1234567890")
         ds.assert_called_once_with(2020, "1234567890")
-        ds.return_value.to_hdf.assert_called_once()
+        ds.return_value.to_feather.assert_called_once()
 
 @mock.patch("fogtools.isd.select_stations", autospec=True)
-@mock.patch("pandas.HDFStore", autospec=True)
 @mock.patch("pandas.read_csv", autospec=True)
-def test_create_db(pr, ph, ss, stations):
+@mock.patch("pandas.concat", autospec=True)
+def test_create_db(pc, pr, ss, stations, caplog):
     from fogtools.isd import create_db
     ss.return_value = stations.iloc[18000:18005]
     create_db()
     ss.assert_called_once()
-    ph.assert_called_once()
-    n = 166 # station-years in those 5 cases
+    pc.assert_called_once()
+    pc.return_value.to_parquet.assert_called_once()
+    n = 12 # station-years in those 5 cases
     assert pr.call_count==n
-    assert ph.return_value.__enter__.return_value.append.call_count==n
+    pr.side_effect = FileNotFoundError
+    with caplog.at_level(logging.DEBUG):
+        create_db()
+    assert "Not available" in caplog.text

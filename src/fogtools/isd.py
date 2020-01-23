@@ -2,11 +2,15 @@
 
 """
 
+import logging
 import os
 import pathlib
 import numpy
 import pandas
 import pkg_resources
+import itertools
+
+LOG = logging.getLogger(__name__)
 
 def get_stations():
     """Return a list of ISD stations as a pandas DataFrame
@@ -19,7 +23,8 @@ def get_stations():
                     "fogtools", "data/isd-history.txt")
     df = pandas.read_fwf(station_list, skiprows=20,
                          parse_dates=["BEGIN", "END"],
-                         dtype={"WBAN": "O", "USAF": "O"})
+                         dtype={"WBAN": "string",
+                                "USAF": "string"})
     # The first line of the dataframe is blank.  Normally, one should be able
     # to pass skip_blank_lines=True to read_fwf, but this has no effect:
     #
@@ -65,24 +70,6 @@ def get_station_ids(df):
     """
     return df["USAF"] + df["WBAN"]
 
-def _obj_to_str(df):
-    """Ensure all object-dtypes in df contain only str
-
-    When a pandas DataFrame has a column with strings, it will make an object
-    dtype.  However, if it contains a mixture of strings and ints, this object
-    dtype may have poor performance as an HDF.  See
-    https://stackoverflow.com/q/22998859/974555 and answers there.
-
-    Args:
-        df (pandas.DataFrame):
-            Dataframe on which to operate.
-
-    Returns nothing, operates in-place.
-    """
-
-    oc = [k for (k, v) in df.dtypes.items() if v==numpy.dtype("O")]
-    df.loc[:, oc] = df[oc].applymap(str)
-
 def dl_station(year, id_):
     """Download station from AWS.
 
@@ -99,10 +86,17 @@ def dl_station(year, id_):
         pandas.DataFrame with station contents.
     """
 
-    df = pandas.read_csv(
-         f"s3://noaa-global-hourly-pds/{year:04d}/{id_:s}.csv",
-         dtype={"STATION": str})
-    _obj_to_str(df)
+    s3_uri = f"s3://noaa-global-hourly-pds/{year:04d}/{id_:s}.csv"
+    LOG.debug(f"Reading from S3: {s3_uri:s}")
+    df = pandas.read_csv(s3_uri,
+            usecols=["STATION", "NAME", "DATE", "LATITUDE", "LONGITUDE",
+                      "ELEVATION", "VIS", "TMP", "DEW"],
+            parse_dates=["DATE"],
+            dtype=dict.fromkeys(
+                ["STATION", "NAME", "VIS", "TMP", "DEW"],
+                pandas.StringDtype()))
+#            index_col="DATE")
+#    _obj_to_str(df)
     return df
 
 def _get_cache_dir(base=None):
@@ -144,12 +138,15 @@ def get_station(year, id_):
     """
 
     cachedir = _get_cache_dir()
-    cachefile = (cachedir / str(year) / id_).with_suffix(".h5")
+    cachefile = (cachedir / str(year) / id_).with_suffix(".feather")
     try:
-        return pandas.read_hdf(cachefile, "root")
-    except FileNotFoundError:
+        LOG.debug(f"Reading from cache: {cachefile!s}")
+        return pandas.read_feather(cachefile)
+    except OSError: # includes pyarrow.lib.ArrowIOError
         df = dl_station(year, id_)
-        df.to_hdf(cachefile, "root")
+        cachefile.parent.mkdir(parents=True, exist_ok=True)
+        LOG.debug(f"Storing to cache: {cachefile!s}")
+        df.to_feather(cachefile)
         return df
 
 def extract_vis(df):
@@ -177,22 +174,43 @@ def extract_vis(df):
     tmp["vis"] = vis
     return tmp
 
-def create_db(f=None):
-    """Create a HDF5 database with all New England measurements
+def _count_station_years(stations, start, end):
+    """Count station years
+    """
+    return sum(min(fi, end).year-max(st, start).year+1 for (st, fi) in zip(stations["BEGIN"], stations["END"]))
+
+def create_db(f=None, start=pandas.Timestamp(2017, 1, 1),
+        end=pandas.Timestamp.now()):
+    """Create a parquet database with all New England measurements
+
+    Create a Parquet database with all New England-based measurements between
+    2017 and 2020 (inclusive), for the fields that we are interested in.
 
     Args:
         f (str or pathlib.Path)
-            Where to write the database.  Defaults to a file "store.h5" in
+            Where to write the database.  Defaults to a file "store.parquet" in
             the cache directory.  File will be overwritten.
     """
     stations = select_stations(get_stations())
     ids = get_station_ids(stations)
     cachedir = _get_cache_dir()
-    f = f or (cachedir / "store.h5")
-    with pandas.HDFStore(f, mode="w", complevel=3) as store:
-        for (id_, st, fi) in zip(ids, stations["BEGIN"], stations["END"]):
-            for year in pandas.date_range(
-                    pandas.Timestamp(st.year, 1, 1),
-                    pandas.Timestamp(fi.year+1, 1, 1), freq="Y").year:
+    f = f or (cachedir / "store.parquet")
+    n = _count_station_years(stations, start, end)
+    LOG.info(f"Expecting {n:d} station·years")
+    L = []
+    c = itertools.count()
+    next(c)
+    for (id_, st, fi) in zip(ids, stations["BEGIN"], stations["END"]):
+        for year in pandas.date_range(
+                pandas.Timestamp(max(start, st).year, 1, 1),
+                pandas.Timestamp(min(end, fi).year+1, 1, 1), freq="Y").year:
+            LOG.debug(f"Adding to store, {year:d} for station {id_:s}, no {next(c):d}/{n:d}")
+            try:
                 df = get_station(year, id_)
-                store.append("root", df)
+            except FileNotFoundError:
+                LOG.warning(f"Not available: {id_:s}/{year:d}")
+            else:
+                L.append(df)
+    df_total = pandas.concat(L)
+    LOG.debug(f"Storing to {f!s}")
+    df_total.to_parquet(f)
