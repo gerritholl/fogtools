@@ -12,6 +12,7 @@ import itertools
 
 LOG = logging.getLogger(__name__)
 
+
 def get_stations():
     """Return a list of ISD stations as a pandas DataFrame
 
@@ -34,8 +35,9 @@ def get_stations():
 
     return df.drop(0)
 
+
 def select_stations(df,
-        states=["RI", "MA", "VT", "NH", "ME", "CT", "NY"]):
+                    states=["RI", "MA", "VT", "NH", "ME", "CT", "NY"]):
     """From the stations list, select those we want
 
     From the stations list returned by :func:`get_stations`, return only those
@@ -52,7 +54,8 @@ def select_stations(df,
     Returns:
         pandas.DataFrame with only those stations we want to consider
     """
-    return df[df.isin({"ST": states}).any(1) & (df.END>"20200101")]
+    return df[df.isin({"ST": states}).any(1) & (df.END > "20200101")]
+
 
 def get_station_ids(df):
     """Get station IDs from station list
@@ -69,6 +72,7 @@ def get_station_ids(df):
         pandas.Series with IDs.
     """
     return df["USAF"] + df["WBAN"]
+
 
 def dl_station(year, id_):
     """Download station from AWS.
@@ -89,15 +93,17 @@ def dl_station(year, id_):
     s3_uri = f"s3://noaa-global-hourly-pds/{year:04d}/{id_:s}.csv"
     LOG.debug(f"Reading from S3: {s3_uri:s}")
     df = pandas.read_csv(s3_uri,
-            usecols=["STATION", "NAME", "DATE", "LATITUDE", "LONGITUDE",
-                      "ELEVATION", "VIS", "TMP", "DEW"],
-            parse_dates=["DATE"],
-            dtype=dict.fromkeys(
-                ["STATION", "NAME", "VIS", "TMP", "DEW"],
-                pandas.StringDtype()))
+                         usecols=["STATION", "NAME", "DATE", "LATITUDE",
+                                  "LONGITUDE", "ELEVATION", "VIS", "TMP",
+                                  "DEW"],
+                         parse_dates=["DATE"],
+                         dtype=dict.fromkeys(["STATION", "NAME", "VIS",
+                                              "TMP", "DEW"],
+                                             pandas.StringDtype()))
 #            index_col="DATE")
 #    _obj_to_str(df)
     return df
+
 
 def _get_cache_dir(base=None):
     """Get directory to use for caching
@@ -119,6 +125,7 @@ def _get_cache_dir(base=None):
     cacheroot /= "fogtools"
     cacheroot.mkdir(parents=True, exist_ok=True)
     return cacheroot
+
 
 def get_station(year, id_):
     """Get station as DataFrame from cache or AWS.
@@ -142,12 +149,13 @@ def get_station(year, id_):
     try:
         LOG.debug(f"Reading from cache: {cachefile!s}")
         return pandas.read_feather(cachefile)
-    except OSError: # includes pyarrow.lib.ArrowIOError
+    except OSError:  # includes pyarrow.lib.ArrowIOError
         df = dl_station(year, id_)
         cachefile.parent.mkdir(parents=True, exist_ok=True)
         LOG.debug(f"Storing to cache: {cachefile!s}")
         df.to_feather(cachefile)
         return df
+
 
 def extract_vis(df):
     """From a measurement dataframe, extract visibilities
@@ -174,13 +182,16 @@ def extract_vis(df):
     tmp["vis"] = vis
     return tmp
 
+
 def _count_station_years(stations, start, end):
     """Count station years
     """
-    return sum(min(fi, end).year-max(st, start).year+1 for (st, fi) in zip(stations["BEGIN"], stations["END"]))
+    return sum(min(fi, end).year-max(st, start).year+1
+               for (st, fi) in zip(stations["BEGIN"], stations["END"]))
+
 
 def create_db(f=None, start=pandas.Timestamp(2017, 1, 1),
-        end=pandas.Timestamp.now()):
+              end=pandas.Timestamp.now()):
     """Create a parquet database with all New England measurements
 
     Create a Parquet database with all New England-based measurements between
@@ -204,7 +215,8 @@ def create_db(f=None, start=pandas.Timestamp(2017, 1, 1),
         for year in pandas.date_range(
                 pandas.Timestamp(max(start, st).year, 1, 1),
                 pandas.Timestamp(min(end, fi).year+1, 1, 1), freq="Y").year:
-            LOG.debug(f"Adding to store, {year:d} for station {id_:s}, no {next(c):d}/{n:d}")
+            LOG.debug(f"Adding to store, {year:d} for station {id_:s}, "
+                      f"no {next(c):d}/{n:d}")
             try:
                 df = get_station(year, id_)
             except FileNotFoundError:
