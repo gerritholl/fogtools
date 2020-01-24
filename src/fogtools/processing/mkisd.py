@@ -32,8 +32,8 @@ def get_parser():
     return parser
 
 
-def mkisd():
-    isd.create_db()
+def mkisd(out, start, end):
+    isd.create_db(out, start, end)
 
 
 def main():
