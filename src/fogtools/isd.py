@@ -206,6 +206,10 @@ def create_db(f=None, start=pandas.Timestamp(2017, 1, 1),
     ids = get_station_ids(stations)
     cachedir = _get_cache_dir()
     f = f or (cachedir / "store.parquet")
+    if not isinstance(start, pandas.Timestamp):
+        start = pandas.Timestamp(start)
+    if not isinstance(end, pandas.Timestamp):
+        end = pandas.Timestamp(end)
     n = _count_station_years(stations, start, end)
     LOG.info(f"Expecting {n:d} station·years")
     L = []

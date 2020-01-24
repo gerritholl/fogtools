@@ -151,3 +151,9 @@ def test_create_db(pc, pr, ss, stations, caplog):
     with caplog.at_level(logging.DEBUG):
         create_db()
     assert "Not available" in caplog.text
+    # kw arguments return_value and side_effect not working?
+    # https://stackoverflow.com/q/59882580/974555
+    pr.reset_mock()
+    pr.side_effect = None
+    create_db("/dev/null", "20200101", "20200101")
+    assert pr.call_count == 3
