@@ -8,6 +8,7 @@ import trollimage.colormap
 
 import xarray
 
+
 def blend_fog(sc, other="overview"):
     """Blend fog onto composite
 
@@ -22,13 +23,14 @@ def blend_fog(sc, other="overview"):
             (1.0, (250 / 255, 200 / 255, 40 / 255)))
     ov = satpy.writers.get_enhanced_image(sc[other]).convert("RGBA")
     A = sc["fls_day"].sel(bands="A")
-    Ap = (1-A).where(1-A==0, 0.5)
+    Ap = (1-A).where(1-A == 0, 0.5)
     im = trollimage.xrimage.XRImage(Ap)
     im.stretch()
     im.colorize(fogcol)
     RGBA = xarray.concat([im.data, Ap], dim="bands")
     blend = ov.blend(trollimage.xrimage.XRImage(RGBA))
     return blend
+
 
 def get_fog_blend_from_seviri_nwcsaf(
         fl_sev,
