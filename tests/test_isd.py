@@ -37,6 +37,12 @@ def station():
         return dl_station(2019, "94733099999")
 
 
+@pytest.fixture
+def station_dask(station):
+    import dask.dataframe as ddf
+    return ddf.from_pandas(station, npartitions=2)
+
+
 def test_get_stations(stations):
     # get_stations gets called in fixture
     assert len(stations) == 29742
@@ -73,7 +79,7 @@ def test_dl_station(station):
     assert (station.STATION == "94733099999").all()
 
 
-def test_extract_vis(station):
+def test_extract_vis(station, station_dask):
     from fogtools.isd import extract_vis
     df_vis = extract_vis(station)
     assert df_vis["vis"].min() == 100
@@ -81,6 +87,11 @@ def test_extract_vis(station):
     assert (df_vis["vis_qc"] == "1").all()
     assert (df_vis["vis_vc"] == "9").all()
     assert (df_vis["vis_qvc"] == "9").all()
+    # test with dask
+    import dask.dataframe as ddf
+    df_vis_pandas = extract_vis(station_dask)
+    assert isinstance(df_vis_pandas, ddf.DataFrame)
+    assert df_vis_pandas.compute().equals(df_vis)
 
 
 def test_cache_dir():
@@ -157,3 +168,15 @@ def test_create_db(pc, pr, ss, stations, caplog):
     pr.side_effect = None
     create_db("/dev/null", "20200101", "20200101")
     assert pr.call_count == 3
+
+
+def test_count_fog(station, station_dask):
+    from fogtools.isd import count_fogs_per_day
+    cnt_dt = count_fogs_per_day(station, max_vis=500)
+    assert isinstance(cnt_dt, pandas.Series)
+    assert len(cnt_dt) == 1
+    assert cnt_dt[0] == 1
+    import dask.dataframe as ddf
+    cnt_dk = count_fogs_per_day(station_dask, max_vis=500)
+    assert isinstance(cnt_dk, ddf.Series)
+    assert cnt_dk.compute().equals(cnt_dt)

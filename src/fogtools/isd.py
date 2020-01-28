@@ -173,12 +173,13 @@ def extract_vis(df):
         pandas.DataFrame with four visibilities named vis, vis_qc, vis_vc, and
         vis_qvc.
     """
+    # dask fails with extracting if dtype is StringDtype:
+    # see https://github.com/dask/dask/issues/5833
     tmp = df.VIS.str.extract(r"(\d{6}),(\d),([NV9]),(\d)")
     tmp.columns = ["vis", "vis_qc", "vis_vc", "vis_qvc"]
-    vis = pandas.to_numeric(
-            tmp["vis"],
-            errors="coerce").fillna(999999).astype(numpy.int32)
-    tmp.drop("vis", inplace=True, axis=1)
+    # dask-friendly alternative to pandas.to_numeric while handling bad data
+    vis = tmp.vis.where(~tmp.vis.isna(), "999999").astype("u4")
+    tmp = tmp.drop("vis", axis=1)
     tmp["vis"] = vis
     return tmp
 
@@ -202,6 +203,7 @@ def create_db(f=None, start=pandas.Timestamp(2017, 1, 1),
             Where to write the database.  Defaults to a file "store.parquet" in
             the cache directory.  File will be overwritten.
     """
+    # TODO, this should merge the vis extraction
     stations = select_stations(get_stations())
     ids = get_station_ids(stations)
     cachedir = _get_cache_dir()
@@ -230,3 +232,17 @@ def create_db(f=None, start=pandas.Timestamp(2017, 1, 1),
     df_total = pandas.concat(L)
     LOG.debug(f"Storing to {f!s}")
     df_total.to_parquet(f)
+
+
+def count_fogs_per_day(df, max_vis=150):
+    """Count how many stations register fog per day
+
+    Based on a dataframe containing aggregated measurements for
+    """
+    df["vis"] = extract_vis(df)["vis"]
+    lowvis = (df["vis"] < max_vis) & (df["vis"] > 0)
+    sel = df[lowvis]
+    grouped = sel.groupby([sel["STATION"], sel["DATE"].dt.date])
+    cnt_st_dt = grouped.size()
+    cnt_dt = cnt_st_dt.groupby("DATE").size()
+    return cnt_dt
