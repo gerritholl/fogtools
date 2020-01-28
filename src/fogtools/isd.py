@@ -5,7 +5,6 @@
 import logging
 import os
 import pathlib
-import numpy
 import pandas
 import pkg_resources
 import itertools
