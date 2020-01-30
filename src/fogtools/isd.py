@@ -242,7 +242,6 @@ def read_db(f=None, usedask=True):
     f = f or (cachedir / "store.parquet")
     if usedask:
         df = dask.dataframe.read_parquet(f)
-        df = df.repartition(npartitions=16)
         return df
     else:
         return pandas.read_parquet(f)

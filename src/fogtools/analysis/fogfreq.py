@@ -22,6 +22,6 @@ def get_parser():
 
 def main():
     p = get_parser().parse_args()
-    c = dask.distributed.Client()
+    c = dask.distributed.Client(n_workers=8)
     with dask.distributed.performance_report(filename="/tmp/dask-report.html"):
         plot.plot_fog_frequency()
