@@ -2,6 +2,7 @@ import os
 import io
 import tempfile
 import logging
+import math
 
 import pytest
 import numpy
@@ -77,6 +78,8 @@ def test_dl_station(station):
     # dl_station gets called in fixture
     assert len(station) == 5
     assert (station.STATION == "94733099999").all()
+    assert all(dt == pandas.StringDtype()
+               for dt in station.dtypes[["STATION", "NAME", "VIS", "TMP", "DEW"]])
 
 
 def test_extract_vis(station, station_dask):
@@ -87,11 +90,36 @@ def test_extract_vis(station, station_dask):
     assert (df_vis["vis_qc"] == "1").all()
     assert (df_vis["vis_vc"] == "9").all()
     assert (df_vis["vis_qvc"] == "9").all()
+    assert all(dt == pandas.StringDtype()
+               for dt in df_vis.dtypes[["vis_qc", "vis_vc", "vis_qvc"]])
     # test with dask
     import dask.dataframe as ddf
     df_vis_pandas = extract_vis(station_dask)
     assert isinstance(df_vis_pandas, ddf.DataFrame)
     assert df_vis_pandas.compute().equals(df_vis)
+
+
+def test_extract_temp(station):
+    from fogtools.isd import extract_temp
+    df_temp = extract_temp(station, "TMP")
+    assert math.isclose(df_temp["tmp"].min(), 20.9, rel_tol=1e-3)
+    assert math.isclose(df_temp["tmp"].max(), 37.8, rel_tol=1e-3)
+    assert (df_temp["tmp_qc"] == "1").all()
+    assert df_temp.dtypes["tmp_qc"] == pandas.StringDtype()
+    df_dew = extract_temp(station, "DEW")
+    assert math.isclose(df_dew["dew"].min(), 17.2, rel_tol=1e-3)
+    assert math.isclose(df_dew["dew"].max(), 21.3, rel_tol=1e-3)
+    assert (df_dew["dew_qc"] == "1").all()
+    assert df_dew.dtypes["dew_qc"] == pandas.StringDtype()
+
+
+def test_extract_all(station):
+    from fogtools.isd import extract_and_add_all
+    df = extract_and_add_all(station)
+    assert len(df) == 5
+    assert df.dtypes["vis"] == numpy.dtype("u4")
+    assert df.dtypes["temp"] == numpy.dtype("f4")
+    assert df.dtypes["dew"] == numpy.dtype("f4")
 
 
 def test_cache_dir():

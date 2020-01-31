@@ -5,9 +5,10 @@
 import logging
 import os
 import pathlib
+import itertools
+import numpy
 import pandas
 import pkg_resources
-import itertools
 
 LOG = logging.getLogger(__name__)
 
@@ -99,8 +100,6 @@ def dl_station(year, id_):
                          dtype=dict.fromkeys(["STATION", "NAME", "VIS",
                                               "TMP", "DEW"],
                                              pandas.StringDtype()))
-#            index_col="DATE")
-#    _obj_to_str(df)
     return df
 
 
@@ -183,6 +182,53 @@ def extract_vis(df):
     return tmp
 
 
+def extract_temp(df, tp="TMP"):
+    """From a measurement dataframe, extract temperatures or dew points
+
+    Temperatures and dew points are reported in the AWS ISD CSV files
+    with a sort of nested CSV.  This function unpacks the string and
+    reports temperature and quality code.  See the ISD format focument,
+    page 10 and 11.
+
+    Args:
+        df (pandas.DataFrame):
+            DataFrame with station list, such as from :func:`get_stations`
+
+        tp (str):
+            Can be "TMP" for temperature or "DEW" for dew point.
+
+    Returns:
+        pandas.DataFrame with temperature and corresponding quality code
+    """
+
+    tmp = df[tp].str.extract(r"([+-]\d{4}),([012345679ACIMPRU])")
+    tmp.columns = [tp.lower(), f"{tp.lower():s}_qc"]
+    temp = tmp[tp.lower()].where(~tmp[tp.lower()].isna(), "+9999").astype("f4")/10
+    tmp = tmp.drop(tp.lower(), axis=1)
+    tmp[tp.lower()] = temp
+    return tmp
+
+
+def extract_and_add_all(df):
+    """Extract visibility and temperatures and add to dataframe
+
+    Extract visibility and temperatures, select rows where those are
+    valid, and add to the dataframe.
+    """
+
+    vis = extract_vis(df)
+    tmp = extract_temp(df, "TMP")
+    dew = extract_temp(df, "DEW")
+
+    ok = (vis.vis_qc == "1") & (tmp.tmp_qc=="1") & (dew.dew_qc=="1")
+    df = df[ok]
+    df = df.drop(["VIS", "TMP", "DEW"], axis=1)
+    df["vis"] = vis.vis[ok]
+    df["temp"] = tmp.tmp[ok]
+    df["dew"] = dew.dew[ok]
+    return df
+
+
 def _count_station_years(stations, start, end):
     """Count station years
     """
@@ -227,6 +273,7 @@ def create_db(f=None, start=pandas.Timestamp(2017, 1, 1),
             except FileNotFoundError:
                 LOG.warning(f"Not available: {id_:s}/{year:d}")
             else:
+                df = extract_and_add_all(df)
                 L.append(df)
     df_total = pandas.concat(L)
     LOG.debug(f"Storing to {f!s}")
