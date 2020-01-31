@@ -8,7 +8,6 @@ import pathlib
 import pandas
 import pkg_resources
 import itertools
-import dask.dataframe
 
 LOG = logging.getLogger(__name__)
 
@@ -234,17 +233,13 @@ def create_db(f=None, start=pandas.Timestamp(2017, 1, 1),
     df_total.to_parquet(f)
 
 
-def read_db(f=None, usedask=True):
+def read_db(f=None):
     """Read parquet DB
     """
 
     cachedir = _get_cache_dir()
     f = f or (cachedir / "store.parquet")
-    if usedask:
-        df = dask.dataframe.read_parquet(f)
-        return df
-    else:
-        return pandas.read_parquet(f)
+    return pandas.read_parquet(f)
 
 
 def count_fogs_per_day(df, max_vis=150):

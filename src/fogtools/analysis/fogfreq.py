@@ -4,7 +4,6 @@ Using the database created with collect-isd, visualise how common fog is.
 """
 
 import argparse
-import dask.distributed
 from .. import plot
 
 
@@ -22,6 +21,4 @@ def get_parser():
 
 def main():
     p = get_parser().parse_args()
-    c = dask.distributed.Client(n_workers=8)
-    with dask.distributed.performance_report(filename="/tmp/dask-report.html"):
-        plot.plot_fog_frequency()
+    plot.plot_fog_frequency()
