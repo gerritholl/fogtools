@@ -6,7 +6,8 @@ import logging
 import os
 import pathlib
 import itertools
-import numpy
+import functools
+import operator
 import pandas
 import pkg_resources
 
@@ -142,16 +143,20 @@ def get_station(year, id_):
         pandas.DataFrame with station contents.
     """
 
+    # using pickle for cache files because feather or parquet do not
+    # preserve dtypes: https://github.com/pandas-dev/pandas/issues/31497
+    # and https://github.com/pandas-dev/pandas/issues/29752
+
     cachedir = _get_cache_dir()
-    cachefile = (cachedir / str(year) / id_).with_suffix(".feather")
+    cachefile = (cachedir / str(year) / id_).with_suffix(".pkl")
     try:
         LOG.debug(f"Reading from cache: {cachefile!s}")
-        return pandas.read_feather(cachefile)
+        return pandas.read_pickle(cachefile)
     except OSError:  # includes pyarrow.lib.ArrowIOError
         df = dl_station(year, id_)
         cachefile.parent.mkdir(parents=True, exist_ok=True)
         LOG.debug(f"Storing to cache: {cachefile!s}")
-        df.to_feather(cachefile)
+        df.to_pickle(cachefile)
         return df
 
 
@@ -165,7 +170,8 @@ def extract_vis(df):
 
     Args:
         df (pandas.DataFrame):
-            DataFrame with station list, such as from :func:`get_stations`
+            DataFrame with measurementsn from station, such as returned by
+            :func:`get_station`
 
     Returns:
         pandas.DataFrame with four visibilities named vis, vis_qc, vis_vc, and
@@ -192,7 +198,8 @@ def extract_temp(df, tp="TMP"):
 
     Args:
         df (pandas.DataFrame):
-            DataFrame with station list, such as from :func:`get_stations`
+            DataFrame with measurementsn from station, such as returned by
+            :func:`get_station`
 
         tp (str):
             Can be "TMP" for temperature or "DEW" for dew point.
@@ -203,7 +210,8 @@ def extract_temp(df, tp="TMP"):
 
     tmp = df[tp].str.extract(r"([+-]\d{4}),([012345679ACIMPRU])")
     tmp.columns = [tp.lower(), f"{tp.lower():s}_qc"]
-    temp = tmp[tp.lower()].where(~tmp[tp.lower()].isna(), "+9999").astype("f4")/10
+    temp = tmp[tp.lower()].where(
+            ~tmp[tp.lower()].isna(), "+9999").astype("f4")/10
     tmp = tmp.drop(tp.lower(), axis=1)
     tmp[tp.lower()] = temp
     return tmp
@@ -213,14 +221,29 @@ def extract_and_add_all(df):
     """Extract visibility and temperatures and add to dataframe
 
     Extract visibility and temperatures, select rows where those are
-    valid, and add to the dataframe.
+    valid, and add to the dataframe.  Here, "valid" means the quality codes for
+    each of visibility, temperature, and dew point must be 1, 4, 5, C, I, or M.
+    See the ISD format documentation for details.
+
+    Args:
+        df (pandas.DataFrame):
+            DataFrame with measurementsn from station, such as returned by
+            :func:`get_station`
+
+    Returns:
+        pandas.DataFrame with numeric fields "vis", "temp", and "dew" added
+        and the string fields "VIS", "TMP", and "DEW" removed.
     """
 
     vis = extract_vis(df)
     tmp = extract_temp(df, "TMP")
     dew = extract_temp(df, "DEW")
+    qual_ok = ["1", "4", "5", "C", "I", "M"]
 
-    ok = (vis.vis_qc == "1") & (tmp.tmp_qc=="1") & (dew.dew_qc=="1")
+    ok = functools.reduce(
+            operator.and_,
+            (f.isin(qual_ok) for f in (vis.vis_qc, tmp.tmp_qc, dew.dew_qc)))
+    ok = ok.fillna(False)
     df = df[ok]
     df = df.drop(["VIS", "TMP", "DEW"], axis=1)
     df["vis"] = vis.vis[ok]

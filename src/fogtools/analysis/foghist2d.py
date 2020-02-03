@@ -1,6 +1,7 @@
-"""Plot frequency at which fog occurs
+"""Plot joint distribution fog and delta-T
 
-Using the database created with collect-isd, visualise how common fog is.
+Plot a joint distribution between the frequency of fog occurence
+and the difference between dew point and temperature.
 """
 
 import argparse
@@ -21,4 +22,4 @@ def get_parser():
 
 def main():
     get_parser().parse_args()
-    plot.Visualiser().plot_fog_frequency()
+    plot.Visualiser().plot_fog_dt_hist()

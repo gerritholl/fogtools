@@ -79,7 +79,8 @@ def test_dl_station(station):
     assert len(station) == 5
     assert (station.STATION == "94733099999").all()
     assert all(dt == pandas.StringDtype()
-               for dt in station.dtypes[["STATION", "NAME", "VIS", "TMP", "DEW"]])
+               for dt in station.dtypes[
+                   ["STATION", "NAME", "VIS", "TMP", "DEW"]])
 
 
 def test_extract_vis(station, station_dask):
@@ -162,16 +163,16 @@ def test_get_station():
     from fogtools.isd import get_station
     # need to mock/test case in which file supposedly exists
     # and case where it doesn't
-    with mock.patch("pandas.read_feather", autospec=True) as prf:
+    with mock.patch("pandas.read_pickle", autospec=True) as prf:
         get_station(2020, "1234567890")
         prf.assert_called_once()
 
-    with mock.patch("pandas.read_feather", side_effect=FileNotFoundError,
+    with mock.patch("pandas.read_pickle", side_effect=FileNotFoundError,
                     autospec=True) as prf, \
             mock.patch("fogtools.isd.dl_station", autospec=True) as ds:
         get_station(2020, "1234567890")
         ds.assert_called_once_with(2020, "1234567890")
-        ds.return_value.to_feather.assert_called_once()
+        ds.return_value.to_pickle.assert_called_once()
 
 
 @mock.patch("fogtools.isd.select_stations", autospec=True)
