@@ -315,9 +315,11 @@ def read_db(f=None):
 def count_fogs_per_day(df, max_vis=150):
     """Count how many stations register fog per day
 
-    Based on a dataframe containing aggregated measurements for
+    Based on a dataframe containing aggregated measurements such as returned
+    by :func:`read_db`.
     """
-    df["vis"] = extract_vis(df)["vis"]
+    if not "vis" in df.columns:
+        df["vis"] = extract_vis(df)["vis"]
     lowvis = (df["vis"] < max_vis) & (df["vis"] > 0)
     sel = df[lowvis]
     grouped = sel.groupby([sel["STATION"], sel["DATE"].dt.date])

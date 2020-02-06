@@ -1,18 +1,21 @@
 """Various plotting utilities
 """
 
+import logging
 import datetime
 import pathlib
 import matplotlib.pyplot
 from typhon.plots.common import write_multi
 from . import isd
 
+logger = logging.getLogger(__name__)
 
 class Visualiser:
     def __init__(self):
         self.df = isd.read_db()
 
-    def plot_fog_frequency(self):
+    def plot_fog_frequency(self, name="fogs_per_day"):
+        logger.debug(f"Plotting fog frequency histograms")
         (f, a) = matplotlib.pyplot.subplots()
         for i in [250, 500, 750, 1000]:
             cnt = isd.count_fogs_per_day(self.df, i)
@@ -32,15 +35,16 @@ class Visualiser:
         a.legend()
     #    a.set_xlim([0, 30])
     #    a.set_ylim([0, 150])
-        write_multi(f, plotdir() / "fogs_per_day")
+        write_multi(f, plotdir() / name)
 
-    def plot_fog_dt_hist(self):
+    def plot_fog_dt_hist(self, name="dewpoint_2dhist"):
         """2-D histogram of visibility - delta-temperature
 
         Plot a 2-dimensional histogram (hexbin) of visibility and
         the difference between temperature and dewpoint
         """
 
+        logger.debug(f"Plotting fog-dT joint histogram")
         (f, a) = matplotlib.pyplot.subplots()
         m = a.hexbin(
                 self.df["vis"],
@@ -52,7 +56,7 @@ class Visualiser:
         a.set_xlabel("Visibility [m]")
         a.set_ylabel("T - T_d [K]")
         a.set_title(r"Joint distribution visibility vs. \Delta dewpoint")
-        write_multi(f, plotdir() / "dewpoint_2dhist")
+        write_multi(f, plotdir() / name)
 
 
 def plotdir():

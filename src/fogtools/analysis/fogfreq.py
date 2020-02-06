@@ -20,5 +20,5 @@ def get_parser():
 
 
 def main():
-    get_parser().parse_args()
-    plot.Visualiser().plot_fog_frequency()
+    p = get_parser().parse_args()
+    plot.Visualiser().plot_fog_frequency(p.out)
