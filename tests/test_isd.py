@@ -2,6 +2,7 @@ import os
 import io
 import tempfile
 import logging
+import math
 
 import pytest
 import numpy
@@ -77,6 +78,9 @@ def test_dl_station(station):
     # dl_station gets called in fixture
     assert len(station) == 5
     assert (station.STATION == "94733099999").all()
+    assert all(dt == pandas.StringDtype()
+               for dt in station.dtypes[
+                   ["STATION", "NAME", "VIS", "TMP", "DEW"]])
 
 
 def test_extract_vis(station, station_dask):
@@ -87,11 +91,36 @@ def test_extract_vis(station, station_dask):
     assert (df_vis["vis_qc"] == "1").all()
     assert (df_vis["vis_vc"] == "9").all()
     assert (df_vis["vis_qvc"] == "9").all()
+    assert all(dt == pandas.StringDtype()
+               for dt in df_vis.dtypes[["vis_qc", "vis_vc", "vis_qvc"]])
     # test with dask
     import dask.dataframe as ddf
     df_vis_pandas = extract_vis(station_dask)
     assert isinstance(df_vis_pandas, ddf.DataFrame)
     assert df_vis_pandas.compute().equals(df_vis)
+
+
+def test_extract_temp(station):
+    from fogtools.isd import extract_temp
+    df_temp = extract_temp(station, "TMP")
+    assert math.isclose(df_temp["tmp"].min(), 20.9, rel_tol=1e-3)
+    assert math.isclose(df_temp["tmp"].max(), 37.8, rel_tol=1e-3)
+    assert (df_temp["tmp_qc"] == "1").all()
+    assert df_temp.dtypes["tmp_qc"] == pandas.StringDtype()
+    df_dew = extract_temp(station, "DEW")
+    assert math.isclose(df_dew["dew"].min(), 17.2, rel_tol=1e-3)
+    assert math.isclose(df_dew["dew"].max(), 21.3, rel_tol=1e-3)
+    assert (df_dew["dew_qc"] == "1").all()
+    assert df_dew.dtypes["dew_qc"] == pandas.StringDtype()
+
+
+def test_extract_all(station):
+    from fogtools.isd import extract_and_add_all
+    df = extract_and_add_all(station)
+    assert len(df) == 5
+    assert df.dtypes["vis"] == numpy.dtype("u4")
+    assert df.dtypes["temp"] == numpy.dtype("f4")
+    assert df.dtypes["dew"] == numpy.dtype("f4")
 
 
 def test_cache_dir():
@@ -134,16 +163,24 @@ def test_get_station():
     from fogtools.isd import get_station
     # need to mock/test case in which file supposedly exists
     # and case where it doesn't
-    with mock.patch("pandas.read_feather", autospec=True) as prf:
+    with mock.patch("pandas.read_pickle", autospec=True) as prf:
         get_station(2020, "1234567890")
         prf.assert_called_once()
 
-    with mock.patch("pandas.read_feather", side_effect=FileNotFoundError,
+    with mock.patch("pandas.read_pickle", side_effect=FileNotFoundError,
                     autospec=True) as prf, \
             mock.patch("fogtools.isd.dl_station", autospec=True) as ds:
         get_station(2020, "1234567890")
         ds.assert_called_once_with(2020, "1234567890")
-        ds.return_value.to_feather.assert_called_once()
+        ds.return_value.to_pickle.assert_called_once()
+
+
+@mock.patch("pandas.read_parquet", autospec=True)
+def test_read_db(pr, db):
+    from fogtools.isd import read_db
+    pr.return_value = db
+    db = read_db("/tmp/tofu")
+    pr.assert_called_once_with("/tmp/tofu")
 
 
 @mock.patch("fogtools.isd.select_stations", autospec=True)

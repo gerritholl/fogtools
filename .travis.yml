@@ -6,9 +6,9 @@ env:
   global:
     - PYTHON_VERSION=$TRAVIS_PYTHON_VERSION
     - MAIN_CMD="pytest"
-    - CONDA_DEPENDENCIES="satpy setuptools pyresample pytest-cov coveralls coverage codecov matplotlib pillow pandas s3fs pytables pyarrow dask"
+    - CONDA_DEPENDENCIES="satpy setuptools pyresample pytest-cov coveralls coverage codecov matplotlib pillow pandas s3fs pytables pyarrow tabulate"
     - PIP_DEPENDENCIES=""
-    - CONDA_CHANNELS="conda-forge"
+    - CONDA_CHANNELS="rttools conda-forge"
     - CONDA_CHANNEL_PRIORITY="strict"
     - SETUP_XVFB=False
     - EVENT_TYPE="push pull_request"
@@ -16,6 +16,7 @@ install:
   - git clone --depth 1 git://github.com/astropy/ci-helpers.git
   - source ci-helpers/travis/setup_conda.sh
   - pip install git+https://github.com/pytroll/fogpy.git
+  - pip install git+https://github.com/atmtools/typhon.git
   - pip install --no-deps -e .
 script:
   - $MAIN_CMD $SETUP_CMD
