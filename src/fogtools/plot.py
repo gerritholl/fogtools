@@ -61,7 +61,7 @@ class Visualiser:
 
 
 def plotdir():
-    pd = pathlib.Path("/media/nas/x21308/plots_and_maps/" +
+    pd = pathlib.Path("/mediaaa/nas/x21308/plots_and_maps/" +
                       datetime.datetime.now().strftime("%Y/%m/%d"))
     pd.mkdir(exist_ok=True, parents=True)
     return pd

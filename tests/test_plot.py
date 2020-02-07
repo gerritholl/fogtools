@@ -14,7 +14,8 @@ def v(db):
 @mock.patch("matplotlib.pyplot.subplots", autospec=True)
 @mock.patch("fogtools.plot.write_multi", autospec=True)
 @mock.patch("fogtools.isd.count_fogs_per_day", autospec=True)
-def test_plot_fog_freq(fic, tpcw, mps, v):
+@mock.patch("pathlib.Path", autospec=True)
+def test_plot_fog_freq(pP, fic, tpcw, mps, v):
     (f, a, vc) = (mock.MagicMock(), mock.MagicMock(), mock.MagicMock())
     fic.return_value.value_counts.return_value = vc
     mps.return_value = (f, a)
@@ -30,7 +31,8 @@ def test_plot_fog_freq(fic, tpcw, mps, v):
 
 @mock.patch("matplotlib.pyplot.subplots", autospec=True)
 @mock.patch("fogtools.plot.write_multi", autospec=True)
-def test_plot_fog_dt_hist(tpcw, mps, v):
+@mock.patch("pathlib.Path", autospec=True)
+def test_plot_fog_dt_hist(pP, tpcw, mps, v):
     (f, a) = (mock.MagicMock(), mock.MagicMock())
     mps.return_value = (f, a)
     v.plot_fog_dt_hist()
