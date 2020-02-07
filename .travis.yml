@@ -15,10 +15,8 @@ env:
 install:
   - git clone --depth 1 git://github.com/astropy/ci-helpers.git
   - source ci-helpers/travis/setup_conda.sh
-  - pip install git+https://github.com/dask/dask.git
   - pip install git+https://github.com/pytroll/fogpy.git
   - pip install git+https://github.com/atmtools/typhon.git
-  - pip install pandas==1.0.0rc0
   - pip install --no-deps -e .
 script:
   - $MAIN_CMD $SETUP_CMD
