@@ -318,7 +318,7 @@ def count_fogs_per_day(df, max_vis=150):
     Based on a dataframe containing aggregated measurements such as returned
     by :func:`read_db`.
     """
-    if not "vis" in df.columns:
+    if "vis" not in df.columns:
         df["vis"] = extract_vis(df)["vis"]
     lowvis = (df["vis"] < max_vis) & (df["vis"] > 0)
     sel = df[lowvis]

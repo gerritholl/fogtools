@@ -10,6 +10,7 @@ from . import isd
 
 logger = logging.getLogger(__name__)
 
+
 class Visualiser:
     def __init__(self):
         self.df = isd.read_db()

@@ -17,13 +17,6 @@ csv_test_content = """"STATION","DATE","SOURCE","LATITUDE","LONGITUDE","ELEVATIO
 "94733099999","2019-01-08T04:00:00","4","-32.5833333","151.1666666","45.0","SINGLETON STP, AS","FM-12","99999","V020","070,1,N,0026,1","22000,1,9,N","025000,1,9,9","+0344,1","+0213,1","99999,9","06,0000,9,1",,"2,1,02,1","2,1,02,1","04,99,1,99,9,99,9,99999,9,99,9,99,9","02,1","SYN04294733 11/75 40705 10344 20213 60001 70222="
 """  # noqa: E501
 
-csv_db_test_content = """,STATION,DATE,LATITUDE,LONGITUDE,ELEVATION,NAME,vis,temp,dew
-1000,72047299999,2017-01-31 07:35:00,44.991894,-70.664625,556.26,"STEVEN A BEAN MUNICIPAL, ME US",11265,-17.0,-18.0
-1001,72047299999,2017-01-31 07:55:00,44.991894,-70.664625,556.26,"STEVEN A BEAN MUNICIPAL, ME US",11265,-17.0,-19.0
-1002,72047299999,2017-01-31 08:15:00,44.991894,-70.664625,556.26,"STEVEN A BEAN MUNICIPAL, ME US",16093,-17.0,-20.0
-1003,72047299999,2017-01-31 08:35:00,44.991894,-70.664625,556.26,"STEVEN A BEAN MUNICIPAL, ME US",11265,-17.0,-20.0
-1004,72047299999,2017-01-31 09:15:00,44.991894,-70.664625,556.26,"STEVEN A BEAN MUNICIPAL, ME US",16093,-18.0,-20.0
-"""  # noqa: E501
 
 @pytest.fixture
 def stations():
@@ -49,12 +42,6 @@ def station():
 def station_dask(station):
     import dask.dataframe as ddf
     return ddf.from_pandas(station, npartitions=2)
-
-
-@pytest.fixture
-def db():
-    with io.StringIO(csv_db_test_content) as f:
-        return pandas.read_csv(f, parse_dates=["DATE"])
 
 
 def test_get_stations(stations):
