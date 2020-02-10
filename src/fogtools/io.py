@@ -1,5 +1,8 @@
 """Various IO-related tools
 """
+import os
+import pathlib
+
 
 def _get_cache_dir(base=None):
     """Get directory to use for caching
