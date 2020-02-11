@@ -43,4 +43,3 @@ def test_download_abi(sS):
             patch("fogtools.abi.get_dl_dest", autospec=True) as fag:
         fag.return_value = pathlib.Path(ntf.name)
         download_abi_day(t1, [1, 2, 3])
-    # assert fag.return_value.parent.mkdir.call_count == 24 * 3 * 3
