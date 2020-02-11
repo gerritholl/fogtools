@@ -1,6 +1,8 @@
 """For downloading ABI
 """
 
+import logging
+import sys
 import argparse
 import pandas
 from .. import abi
@@ -34,5 +36,14 @@ def dlabi(dt, chans, tp):
 
 
 def main():
+    p = get_parser().parse_args()
+    h = logging.StreamHandler(sys.stderr)
+    h.setFormatter(logging.Formatter(
+        "%(levelname)-8s %(name)s %(asctime)s "
+        "%(module)s.%(funcName)s:%(lineno)s: %(message)s"))
+    for m in ("fogtools", "typhon"):
+        log = logging.getLogger(m)
+        log.setLevel(logging.DEBUG)
+        log.addHandler(h)
     p = get_parser().parse_args()
     dlabi(p.date, p.channels, p.type)
