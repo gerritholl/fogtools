@@ -3,9 +3,9 @@ import os
 
 
 def test_cache_dir():
-    from fogtools.isd import _get_cache_dir
+    from fogtools.io import get_cache_dir
     with tempfile.TemporaryDirectory() as tmpdir:
-        d = _get_cache_dir(tmpdir)
+        d = get_cache_dir(tmpdir)
         assert d.exists()
         assert d.is_dir()
         assert str(d.parent) == tmpdir
@@ -13,7 +13,7 @@ def test_cache_dir():
     try:
         _environ = os.environ.copy()
         del os.environ["XDG_CACHE_HOME"]
-        d = _get_cache_dir()
+        d = get_cache_dir()
         assert d.exists()
         assert d.is_dir()
         assert d.parent.name == ".cache"
@@ -28,7 +28,7 @@ def test_cache_dir():
     try:
         _environ = os.environ.copy()
         os.environ["XDG_CACHE_HOME"] = os.environ.get("TMPDIR", "/tmp")
-        d = _get_cache_dir()
+        d = get_cache_dir()
         assert d.exists()
         assert d.is_dir()
         assert str(d.parent) == "/tmp"

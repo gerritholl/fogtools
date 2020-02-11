@@ -2,9 +2,10 @@
 """
 import os
 import pathlib
+import datetime
 
 
-def _get_cache_dir(base=None):
+def get_cache_dir(base=None):
     """Get directory to use for caching
 
     Get (and create, if necessary) directory to use for caching.

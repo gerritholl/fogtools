@@ -34,7 +34,7 @@ def download_abi_day(dt, chans, tp="C"):
     """
 
     fs = s3fs.S3FileSystem(anon=True)
-    cd = ftio._get_cache_dir()
+    cd = ftio.get_cache_dir()
     for t in pandas.date_range(dt.floor("D"), periods=24, freq="1H"):
         for chan in chans:
             for f in s3_select(t, chan):

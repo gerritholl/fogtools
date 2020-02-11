@@ -3,8 +3,6 @@
 """
 
 import logging
-import os
-import pathlib
 import itertools
 import functools
 import operator
@@ -254,7 +252,7 @@ def create_db(f=None, start=pandas.Timestamp(2017, 1, 1),
     # TODO, this should merge the vis extraction
     stations = select_stations(get_stations())
     ids = get_station_ids(stations)
-    cachedir = _get_cache_dir()
+    cachedir = ftio.get_cache_dir()
     f = f or (cachedir / "store.parquet")
     if not isinstance(start, pandas.Timestamp):
         start = pandas.Timestamp(start)
@@ -287,7 +285,7 @@ def read_db(f=None):
     """Read parquet DB
     """
 
-    cachedir = _get_cache_dir()
+    cachedir = ftio.get_cache_dir()
     f = f or (cachedir / "store.parquet")
     return pandas.read_parquet(f)
 

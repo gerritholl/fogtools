@@ -2,8 +2,6 @@
 """
 
 import logging
-import datetime
-import pathlib
 import matplotlib.pyplot
 from typhon.plots.common import write_multi
 from . import isd
