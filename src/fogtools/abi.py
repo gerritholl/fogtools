@@ -26,7 +26,7 @@ def s3_select(dt, chan, tp="C"):
 
 
 def get_dl_dest(cd, t, chan, f):
-    dd = cd / "abi" / t.strftime("%Y/%m/%d/%H/%M") / f"{chan:>02d}"
+    dd = cd / "abi" / t.strftime("%Y/%m/%d/%H/%M") / f"{chan:>01d}"
     df = dd / f.split("/")[-1]
     return df
 

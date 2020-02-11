@@ -1,7 +1,7 @@
 import tempfile
 import pathlib
 import pandas
-from unittest.mock import patch
+from unittest.mock import patch, call
 
 
 def test_get3_uri():
@@ -42,15 +42,29 @@ def test_get_dl_dest():
 @patch("s3fs.S3FileSystem", autospec=True)
 def test_download_abi(sS):
     from fogtools.abi import download_abi_day
+    from fogtools.io import get_cache_dir
     t1 = pandas.Timestamp("2020-03-01T12")
     sS.return_value.glob.side_effect = lambda *a: iter(
             ["seitan", "tofu", "tempeh"])
     with tempfile.TemporaryDirectory() as td, \
             patch("fogtools.io.get_cache_dir", autospec=True) as fig:
-        fig.return_value = pathlib.Path(td)
+        ptd = pathlib.Path(td)
+        fig.return_value = ptd
         download_abi_day(t1, [1, 2, 3])
-    assert sS.return_value.get.call_count == 24 * 3 * 3
+        assert sS.return_value.get.call_count == 24 * 3 * 3
+        ts = t1.strftime("%Y/%m/%d/%H/%M")
+        sS.return_value.get.assert_has_calls([
+            call("s3://tofu", ptd / "abi" / ts / "1/tofu"),
+            call("s3://tempeh", ptd / "abi" / ts / "2/tempeh"),
+            call("s3://seitan", ptd / "abi" / ts / "3/seitan")],
+            any_order=True)
     with tempfile.NamedTemporaryFile() as ntf, \
             patch("fogtools.abi.get_dl_dest", autospec=True) as fag:
         fag.return_value = pathlib.Path(ntf.name)
         download_abi_day(t1, [1, 2, 3])
+        cd = get_cache_dir()
+        fag.assert_has_calls([
+            call(cd, pandas.Timestamp("2020-03-01T06"), 2, "tofu"),
+            call(cd, pandas.Timestamp("2020-03-01T16"), 1, "seitan"),
+            call(cd, pandas.Timestamp("2020-03-01T00"), 3, "seitan")],
+            any_order=True)
