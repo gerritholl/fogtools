@@ -35,8 +35,9 @@ def test_get_dl_dest():
     t = pandas.Timestamp("2020-03-01T12")
     assert get_dl_dest(b, t, 42, "lettuce") == \
         pathlib.Path("/tmp/abi/2020/03/01/12/00/42/lettuce")
+    t = pandas.Timestamp("2020-03-01T12:30")
     assert get_dl_dest(b, t, 42, "a/b/lettuce.nuts") == \
-        pathlib.Path("/tmp/abi/2020/03/01/12/00/42/lettuce.nuts")
+        pathlib.Path("/tmp/abi/2020/03/01/12/30/42/lettuce.nuts")
 
 
 @patch("s3fs.S3FileSystem", autospec=True)
@@ -44,19 +45,29 @@ def test_download_abi(sS):
     from fogtools.abi import download_abi_day
     from fogtools.io import get_cache_dir
     t1 = pandas.Timestamp("2020-03-01T12")
-    sS.return_value.glob.side_effect = lambda *a: iter(
-            ["seitan", "tofu", "tempeh"])
+    ref = ["noaa-goes16/ABI-L1b-RadC/2017/059/00/OR_ABI-L1b-RadC-M3C12_G16_"
+           "s20170590002505_e20170590005283_c20170590005323.nc",
+           "noaa-goes16/ABI-L1b-RadC/2017/059/01/OR_ABI-L1b-RadC-M3C12_G16_"
+           "s20170590122505_e20170590125283_c20170590125314.nc",
+           "noaa-goes16/ABI-L1b-RadC/2017/059/06/OR_ABI-L1b-RadC-M3C03_G16_"
+           "s20170590627505_e20170590630278_c20170590630319.nc"]
+    sS.return_value.glob.side_effect = lambda *a: iter(ref)
     with tempfile.TemporaryDirectory() as td, \
             patch("fogtools.io.get_cache_dir", autospec=True) as fig:
         ptd = pathlib.Path(td)
         fig.return_value = ptd
         download_abi_day(t1, [1, 2, 3])
         assert sS.return_value.get.call_count == 24 * 3 * 3
-        ts = t1.strftime("%Y/%m/%d/%H/%M")
         sS.return_value.get.assert_has_calls([
-            call("s3://tofu", ptd / "abi" / ts / "1/tofu"),
-            call("s3://tempeh", ptd / "abi" / ts / "2/tempeh"),
-            call("s3://seitan", ptd / "abi" / ts / "3/seitan")],
+            call("s3://" + ref[0],
+                 ptd / "abi" / "2017" / "02" / "28" / "00" / "02" /
+                 "1" / ref[0].split("/")[-1]),
+            call("s3://" + ref[1],
+                 ptd / "abi" / "2017" / "02" / "28" / "01" / "22" /
+                 "2" / ref[1].split("/")[-1]),
+            call("s3://" + ref[2],
+                 ptd / "abi" / "2017" / "02" / "28" / "06" / "27" /
+                 "3" / ref[2].split("/")[-1])],
             any_order=True)
     with tempfile.NamedTemporaryFile() as ntf, \
             patch("fogtools.abi.get_dl_dest", autospec=True) as fag:
@@ -64,7 +75,7 @@ def test_download_abi(sS):
         download_abi_day(t1, [1, 2, 3])
         cd = get_cache_dir()
         fag.assert_has_calls([
-            call(cd, pandas.Timestamp("2020-03-01T06"), 2, "tofu"),
-            call(cd, pandas.Timestamp("2020-03-01T16"), 1, "seitan"),
-            call(cd, pandas.Timestamp("2020-03-01T00"), 3, "seitan")],
+            call(cd, pandas.Timestamp("2017-02-28T00:02:50.5"), 2, ref[0]),
+            call(cd, pandas.Timestamp("2017-02-28T01:22:50.5"), 1, ref[1]),
+            call(cd, pandas.Timestamp("2017-02-28T06:27:50.5"), 3, ref[2])],
             any_order=True)

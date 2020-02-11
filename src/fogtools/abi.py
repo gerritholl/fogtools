@@ -4,6 +4,7 @@ Routines related to interacting with ABI, such as downloading from AWS.
 """
 
 import logging
+import re
 
 from . import io as ftio
 import s3fs
@@ -31,6 +32,13 @@ def get_dl_dest(cd, t, chan, f):
     return df
 
 
+def get_time_from_fn(fn):
+    """Get starting time from ABI filename
+    """
+    m = re.search(r"_s[0-9]{14}_", fn)
+    return pandas.to_datetime(m[0], format="_s%Y%j%H%M%S%f_")
+
+
 def download_abi_day(dt, chans, tp="C"):
     """Download ABI for day
 
@@ -44,10 +52,10 @@ def download_abi_day(dt, chans, tp="C"):
     for t in pandas.date_range(dt.floor("D"), periods=24, freq="1H"):
         for chan in chans:
             for f in s3_select(t, chan):
-                df = get_dl_dest(cd, t, chan, f)
+                df = get_dl_dest(cd, get_time_from_fn(f), chan, f)
                 if df.exists():
                     logger.debug(f"Already exists: {df!s}")
                 else:
-                    logger.debug(f"Getting {f!s}")
+                    logger.info(f"Downloading {f!s}")
                     df.parent.mkdir(exist_ok=True, parents=True)
                     fs.get(f"s3://{f:s}", df)
