@@ -10,7 +10,7 @@ def test_cache_dir():
         assert d.name == "fogtools"
     try:
         _environ = os.environ.copy()
-        del os.environ["XDG_CACHE_HOME"]
+        os.environ.pop("XDG_CACHE_HOME", None)
         d = get_cache_dir()
         assert d.parent.name == ".cache"
         assert d.name == "fogtools"
