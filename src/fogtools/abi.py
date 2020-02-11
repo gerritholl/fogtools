@@ -25,6 +25,12 @@ def s3_select(dt, chan, tp="C"):
     yield from fs.glob(s3_uri + f"/*C{chan:>02d}*")
 
 
+def get_dl_dest(cd, t, chan, f):
+    dd = cd / "abi" / t.strftime("%Y/%m/%d/%H/%M") / f"{chan:>02d}"
+    df = dd / f.split("/")[-1]
+    return df
+
+
 def download_abi_day(dt, chans, tp="C"):
     """Download ABI for day
 
@@ -38,11 +44,10 @@ def download_abi_day(dt, chans, tp="C"):
     for t in pandas.date_range(dt.floor("D"), periods=24, freq="1H"):
         for chan in chans:
             for f in s3_select(t, chan):
-                dd = cd / "abi" / t.strftime("%Y/%m/%d/%H/%M") / f"{chan:>02d}"
-                df = dd / f.split("/")[-1]
+                df = get_dl_dest(cd, t, chan, f)
                 if df.exists():
                     logger.debug(f"Already exists: {df!s}")
                 else:
-                    dd.mkdir(exist_ok=True, parents=True)
                     logger.debug(f"Getting {f!s}")
+                    df.parent.mkdir(exist_ok=True, parents=True)
                     fs.get(f"s3://{f:s}", df)

@@ -27,10 +27,13 @@ def test_s3_select(sS):
 
 
 @patch("s3fs.S3FileSystem", autospec=True)
-def test_download_abi(sS):
+@patch("fogtools.abi.get_dl_dest", autospec=True)
+def test_download_abi(fag, sS):
     from fogtools.abi import download_abi_day
     t1 = pandas.Timestamp("2020-03-01T12")
     sS.return_value.glob.side_effect = lambda *a: iter(
             ["seitan", "tofu", "tempeh"])
+    fag.return_value.exists.return_value = False
     download_abi_day(t1, [1, 2, 3])
     assert sS.return_value.get.call_count == 24 * 3 * 3
+    assert fag.return_value.parent.mkdir.call_count == 24 * 3 * 3

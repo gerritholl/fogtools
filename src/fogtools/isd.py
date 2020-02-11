@@ -8,6 +8,7 @@ import functools
 import operator
 import pandas
 import pkg_resources
+import pathlib
 
 from . import io as ftio
 
@@ -132,8 +133,8 @@ def get_station(year, id_):
         return pandas.read_pickle(cachefile)
     except OSError:  # includes pyarrow.lib.ArrowIOError
         df = dl_station(year, id_)
-        cachefile.parent.mkdir(parents=True, exist_ok=True)
         LOG.debug(f"Storing to cache: {cachefile!s}")
+        cachefile.parent.mkdir(parents=True, exist_ok=True)
         df.to_pickle(cachefile)
         return df
 
@@ -253,7 +254,7 @@ def create_db(f=None, start=pandas.Timestamp(2017, 1, 1),
     stations = select_stations(get_stations())
     ids = get_station_ids(stations)
     cachedir = ftio.get_cache_dir()
-    f = f or (cachedir / "store.parquet")
+    f = pathlib.Path(f) if f is not None else (cachedir / "store.parquet")
     if not isinstance(start, pandas.Timestamp):
         start = pandas.Timestamp(start)
     if not isinstance(end, pandas.Timestamp):
@@ -278,6 +279,7 @@ def create_db(f=None, start=pandas.Timestamp(2017, 1, 1),
                 L.append(df)
     df_total = pandas.concat(L)
     LOG.debug(f"Storing to {f!s}")
+    f.parent.mkdir(exist_ok=True, parents=True)
     df_total.to_parquet(f)
 
 

@@ -23,12 +23,10 @@ def get_cache_dir(base=None):
                  pathlib.Path.home() / ".cache")
     cacheroot = pathlib.Path(cacheroot)
     cacheroot /= "fogtools"
-    cacheroot.mkdir(parents=True, exist_ok=True)
     return cacheroot
 
 
 def plotdir():
     pd = pathlib.Path("/media/nas/x21308/plots_and_maps/" +
                       datetime.datetime.now().strftime("%Y/%m/%d"))
-    pd.mkdir(exist_ok=True, parents=True)
     return pd
