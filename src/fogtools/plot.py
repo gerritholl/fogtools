@@ -2,11 +2,10 @@
 """
 
 import logging
-import datetime
-import pathlib
 import matplotlib.pyplot
 from typhon.plots.common import write_multi
 from . import isd
+from . import io as ftio
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +35,7 @@ class Visualiser:
         a.legend()
     #    a.set_xlim([0, 30])
     #    a.set_ylim([0, 150])
-        write_multi(f, plotdir() / name)
+        write_multi(f, ftio.plotdir() / name)
 
     def plot_fog_dt_hist(self, name="dewpoint_2dhist"):
         """2-D histogram of visibility - delta-temperature
@@ -57,11 +56,4 @@ class Visualiser:
         a.set_xlabel("Visibility [m]")
         a.set_ylabel("T - T_d [K]")
         a.set_title(r"Joint distribution visibility vs. \Delta dewpoint")
-        write_multi(f, plotdir() / name)
-
-
-def plotdir():
-    pd = pathlib.Path("/mediaaa/nas/x21308/plots_and_maps/" +
-                      datetime.datetime.now().strftime("%Y/%m/%d"))
-    pd.mkdir(exist_ok=True, parents=True)
-    return pd
+        write_multi(f, ftio.plotdir() / name)
