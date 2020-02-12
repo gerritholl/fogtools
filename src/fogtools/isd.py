@@ -3,13 +3,14 @@
 """
 
 import logging
-import os
-import pathlib
 import itertools
 import functools
 import operator
 import pandas
 import pkg_resources
+import pathlib
+
+from . import io as ftio
 
 LOG = logging.getLogger(__name__)
 
@@ -104,28 +105,6 @@ def dl_station(year, id_):
     return df
 
 
-def _get_cache_dir(base=None):
-    """Get directory to use for caching
-
-    Get (and create, if necessary) directory to use for caching.
-
-    Args:
-        base (str or pathlib.Path):
-            Directory in which to create cache dir.  If not given, use
-            XDG_CACHE_HOME or otherwise ~/.cache.
-
-    Returns:
-        pathlib.Path object pointing to cache dir
-    """
-    cacheroot = (base or
-                 os.environ.get("XDG_CACHE_HOME") or
-                 pathlib.Path.home() / ".cache")
-    cacheroot = pathlib.Path(cacheroot)
-    cacheroot /= "fogtools"
-    cacheroot.mkdir(parents=True, exist_ok=True)
-    return cacheroot
-
-
 def get_station(year, id_):
     """Get station as DataFrame from cache or AWS.
 
@@ -147,15 +126,15 @@ def get_station(year, id_):
     # preserve dtypes: https://github.com/pandas-dev/pandas/issues/31497
     # and https://github.com/pandas-dev/pandas/issues/29752
 
-    cachedir = _get_cache_dir()
+    cachedir = ftio.get_cache_dir()
     cachefile = (cachedir / str(year) / id_).with_suffix(".pkl")
     try:
         LOG.debug(f"Reading from cache: {cachefile!s}")
         return pandas.read_pickle(cachefile)
     except OSError:  # includes pyarrow.lib.ArrowIOError
         df = dl_station(year, id_)
-        cachefile.parent.mkdir(parents=True, exist_ok=True)
         LOG.debug(f"Storing to cache: {cachefile!s}")
+        cachefile.parent.mkdir(parents=True, exist_ok=True)
         df.to_pickle(cachefile)
         return df
 
@@ -274,8 +253,8 @@ def create_db(f=None, start=pandas.Timestamp(2017, 1, 1),
     # TODO, this should merge the vis extraction
     stations = select_stations(get_stations())
     ids = get_station_ids(stations)
-    cachedir = _get_cache_dir()
-    f = f or (cachedir / "store.parquet")
+    cachedir = ftio.get_cache_dir()
+    f = pathlib.Path(f) if f is not None else (cachedir / "store.parquet")
     if not isinstance(start, pandas.Timestamp):
         start = pandas.Timestamp(start)
     if not isinstance(end, pandas.Timestamp):
@@ -300,6 +279,7 @@ def create_db(f=None, start=pandas.Timestamp(2017, 1, 1),
                 L.append(df)
     df_total = pandas.concat(L)
     LOG.debug(f"Storing to {f!s}")
+    f.parent.mkdir(exist_ok=True, parents=True)
     df_total.to_parquet(f)
 
 
@@ -307,7 +287,7 @@ def read_db(f=None):
     """Read parquet DB
     """
 
-    cachedir = _get_cache_dir()
+    cachedir = ftio.get_cache_dir()
     f = f or (cachedir / "store.parquet")
     return pandas.read_parquet(f)
 
