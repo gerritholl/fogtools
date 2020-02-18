@@ -3,6 +3,7 @@
 Routines related to interacting with ABI, such as downloading from AWS.
 """
 
+import itertools
 import logging
 import re
 
@@ -11,6 +12,8 @@ import s3fs
 import pandas
 
 logger = logging.getLogger(__name__)
+
+fogpy_abi_channels = {2, 3, 5, 7, 11, 14, 15}
 
 
 def get_s3_uri(dt, tp="C"):
@@ -39,7 +42,7 @@ def get_time_from_fn(fn):
     return pandas.to_datetime(m[0], format="_s%Y%j%H%M%S%f_")
 
 
-def download_abi_day(dt, chans, tp="C"):
+def download_abi_day(dt, chans=fogpy_abi_channels, tps="C"):
     """Download ABI for day
 
     Args:
@@ -49,13 +52,15 @@ def download_abi_day(dt, chans, tp="C"):
 
     fs = s3fs.S3FileSystem(anon=True)
     cd = ftio.get_cache_dir()
-    for t in pandas.date_range(dt.floor("D"), periods=24, freq="1H"):
-        for chan in chans:
-            for f in s3_select(t, chan):
-                df = get_dl_dest(cd, get_time_from_fn(f), chan, f)
-                if df.exists():
-                    logger.debug(f"Already exists: {df!s}")
-                else:
-                    logger.info(f"Downloading {f!s}")
-                    df.parent.mkdir(exist_ok=True, parents=True)
-                    fs.get(f"s3://{f:s}", df)
+    for (t, chan, tp) in itertools.product(
+            pandas.date_range(dt.floor("D"), periods=24, freq="1H"),
+            chans,
+            tps):
+        for f in s3_select(t, chan, tp=tp):
+            df = get_dl_dest(cd, get_time_from_fn(f), chan, f)
+            if df.exists():
+                logger.debug(f"Already exists: {df!s}")
+            else:
+                logger.info(f"Downloading {f!s}")
+                df.parent.mkdir(exist_ok=True, parents=True)
+                fs.get(f"s3://{f:s}", df)

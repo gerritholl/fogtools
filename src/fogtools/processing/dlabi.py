@@ -18,14 +18,16 @@ def get_parser():
             help="Date to download")
 
     parser.add_argument(
-            "channels", action="store", type=int,
+            "--channels", action="store", type=int,
             nargs="+",
+            default=abi.fogpy_abi_channels,
             help="Channels to download")
 
     parser.add_argument(
-            "--type", action="store", type=str,
+            "--types", action="store", type=str,
+            nargs="+",
             choices=["C", "F", "M"],
-            default="C",
+            default=["C"],
             help="Download 'C'ONUS, 'F'ull disk, or 'M'esoscale")
 
     return parser
@@ -46,4 +48,4 @@ def main():
         log.setLevel(logging.DEBUG)
         log.addHandler(h)
     p = get_parser().parse_args()
-    dlabi(p.date, p.channels, p.type)
+    dlabi(p.date, p.channels, p.types)
