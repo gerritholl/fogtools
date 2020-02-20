@@ -13,6 +13,9 @@ import pandas
 
 logger = logging.getLogger(__name__)
 
+# NWCSAF gebruikt 2, 6, 7, 11, 14
+nwcsaf_abi_channels = {2, 4, 6, 7, 11, 14}
+# fogpy gebruikt 2, 3, 5, 7, 11, 14, 15
 fogpy_abi_channels = {2, 3, 5, 7, 11, 14, 15}
 
 
@@ -42,7 +45,8 @@ def get_time_from_fn(fn):
     return pandas.to_datetime(m[0], format="_s%Y%j%H%M%S%f_")
 
 
-def download_abi_day(dt, chans=fogpy_abi_channels, tps="C"):
+def download_abi_day(dt, chans=fogpy_abi_channels|nwcsaf_abi_channels,
+                     tps="C"):
     """Download ABI for day
 
     Args:
