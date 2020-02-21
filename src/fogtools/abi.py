@@ -14,7 +14,7 @@ import pandas
 logger = logging.getLogger(__name__)
 
 # NWCSAF gebruikt 2, 6, 7, 11, 14
-nwcsaf_abi_channels = {2, 4, 6, 7, 11, 14}
+nwcsaf_abi_channels = {2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 14, 15, 16}
 # fogpy gebruikt 2, 3, 5, 7, 11, 14, 15
 fogpy_abi_channels = {2, 3, 5, 7, 11, 14, 15}
 
