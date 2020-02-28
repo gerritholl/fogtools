@@ -2,9 +2,16 @@
 """
 
 import pathlib
+import subprocess
+import logging
+import itertools
 
 import lxml.etree
 import lxml.builder
+
+from . import io as ftio
+
+logger = logging.getLogger(__name__)
 
 
 def make_icon_nwcsaf_filename(base, t, fs):
@@ -29,6 +36,13 @@ def make_icon_nwcsaf_filename(base, t, fs):
     return pathlib.Path(base) / "import" / "NWP_data" / fn
 
 
+def ensure_parents_exist(*args):
+    """For all paths, ensure parent dirs exist
+    """
+    for p in args:
+        p.parent.mkdir(exist_ok=True, parents=True)
+
+
 class RequestBuilder:
     """Class to build a SKY request for ICON for NWCSAF
     """
@@ -49,13 +63,14 @@ class RequestBuilder:
             nsmap={"sky": "http://dwd.de/sky"})
         self.start_time = start_time
         self.base = base
+        self.expected_output_files = set()
 
     def refdate(self):
         return self.E.referenceDate(
                 self.E.value(self.start_time.strftime("%Y%m%d%H%M%S")))
 
     def step(self, st):
-        return self.E.field(self.E.value(f"{st:>02d}"))
+        return self.E.field(self.E.value(f"{st:>02d}"), name="STEP")
 
     def sort_order(self):
         return self.E.sort(
@@ -68,12 +83,18 @@ class RequestBuilder:
             self.E.info(level="countXML"))
 
     def transfer(self, fs):
-        return self.E.transfer(
+        fn_name = make_icon_nwcsaf_filename(
+                        self.base, self.start_time, fs)
+        hitFile = ftio.get_cache_dir() / "ihits"
+        infoFile = ftio.get_cache_dir() / "info"
+        ensure_parents_exist(fn_name, hitFile, infoFile)
+        self.expected_output_files |= {fn_name, hitFile, infoFile}
+        t = self.E.transfer(
                 self.E.file(
-                    hitFile="ihits",
-                    infoFile="info",
-                    name=str(make_icon_nwcsaf_filename(
-                        self.base, self.start_time, fs))))
+                    hitFile=str(hitFile),
+                    infoFile=str(infoFile),
+                    name=str(fn_name)))
+        return t
 
     def edition(self):
         return self.E.field(self.E.value("2"), name="edit")
@@ -111,33 +132,39 @@ class RequestBuilder:
                 self.edition(),
                 category=self.skycat)
 
-    def get_request(self):
+    def select_read_store_forc(self, s, mode):
+        return self.E.read(
+                getattr(self, f"select_{mode:s}_props")(s),
+                self.sort_order(),
+                self.result(),
+                self.transfer(s),
+                database=self.db)
+
+    def get_request_et(self):
         return self.E.requestCollection(
                 self.E.read(
                     self.select_surf_anal_props(),
                     self.result(),
                     self.transfer(0),
                     database=self.db),
-                self.E.read(
-                    self.select_surf_forc_props(1),
-                    self.sort_order(),
-                    self.result(),
-                    self.transfer(1),
-                    database=self.db),
-                self.E.read(
-                    self.select_level_props(1),
-                    self.sort_order(),
-                    self.result(),
-                    self.transfer(1),
-                    database=self.db),
+                *itertools.chain(*((
+                    self.select_read_store_forc(i, "surf_forc"),
+                    self.select_read_store_forc(i, "level"))
+                        for i in range(6))),
                 processing="sequential",
                 ifErr="go",
                 priority="1",
                 validate="true",
                 append="false")
 
+    def get_request_ba(self):
+        et = self.get_request_et()
+        return lxml.etree.tostring(
+                et, standalone=True,
+                pretty_print=True).replace(b"'", b'"', 6)
 
-def make_icon_request_for_nwcsaf(
+
+def build_icon_request_for_nwcsaf(
         base,
         dt_now,
         ):
@@ -145,8 +172,48 @@ def make_icon_request_for_nwcsaf(
     """
 
     rb = RequestBuilder(base, dt_now)
-    em = rb.get_request()
-    return lxml.etree.tostring(
-            em,
-            standalone=True,
-            pretty_print=True).replace(b"'", b'"', 6)
+    return rb.get_request_ba()
+
+
+def send_to_sky(b):
+    """Send request to sky.
+
+    Request might come from :func:`build_icon_request_for_nwcsaf`.
+
+    Args:
+        b (bytes):
+            Request to send to sky.
+
+    Returns:
+        CalledProcess object from subprocess module
+    """
+
+    try:
+        cp = subprocess.run(
+                ["sky", "-v"], input=b, check=True, capture_output=True)
+    except subprocess.CalledProcessError as e:
+        logger.error(
+                f"sky call failed with code {e.returncode:d}\n"
+                "stdout\n"
+                "------\n" +
+                (e.stdout.decode("ascii") or "(empty)\n") +
+                "stderr\n"
+                "------\n" +
+                (e.stderr.decode("ascii") or "(empty)\n") +
+                "sky-command\n"
+                "-----------\n" +
+                b.decode("ascii"))
+        raise
+    return cp
+
+
+def get_and_send(base, dt_now):
+    rb = RequestBuilder(base, dt_now)
+    ba = rb.get_request_ba()
+    logger.info("Sending request to sky, expecting output files: " +
+                ", ".join(sorted(str(x) for x in rb.expected_output_files)))
+    logger.debug("Full request:\n" + ba.decode("ascii"))
+    send_to_sky(ba)
+    for eof in rb.expected_output_files:
+        if not pathlib.Path(eof).exists():
+            raise FileNotFoundError(eof)
