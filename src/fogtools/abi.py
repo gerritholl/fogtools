@@ -56,6 +56,7 @@ def download_abi_day(dt, chans=fogpy_abi_channels|nwcsaf_abi_channels,
 
     fs = s3fs.S3FileSystem(anon=True)
     cd = ftio.get_cache_dir()
+    # loop through hours, because data files sorted per hour in AWS
     for (t, chan, tp) in itertools.product(
             pandas.date_range(dt.floor("D"), periods=24, freq="1H"),
             chans,
