@@ -13,6 +13,11 @@ def rb(tmp_path):
 
 
 @pytest.fixture
+def period():
+    return pandas.Period("20200224120000")
+
+
+@pytest.fixture
 def timestamp():
     return pandas.Timestamp("20200224120000")
 
@@ -72,7 +77,7 @@ def test_edition(rb):
     t = rb.edition()
     assert (lxml.etree.tostring(t) ==
             b'<sky:field xmlns:sky="http://dwd.de/sky" '
-        b'name="GRIB_EDITION"><sky:value>2</sky:value></sky:field>')
+            b'name="GRIB_EDITION"><sky:value>2</sky:value></sky:field>')
 
 
 def test_surf_anal_props(rb, timestamp):
@@ -103,19 +108,34 @@ def test_level_props(rb, timestamp):
 
 
 def test_get_request(rb, tmp_path, timestamp):
-    t = rb.get_request_et(timestamp)
+    t = rb.get_request_et(
+            [timestamp, timestamp.replace(year=2042),
+             timestamp.replace(year=1800)])
     assert all([x.tag.endswith("read") for x in t])
     assert t[0][0][0][0].text == "20200224120000"
     assert t[8][3][0].get("name") == str(
             tmp_path / "import" / "NWP_data" /
             "S_NWC_NWP_2020-02-24T12:00:00Z_003.grib")
+    assert len(t) == 39
+    assert all([t[i][0][0][0].text == "20420224120000"
+                for i in range(13, 26)])
 
 
 def test_make_icon_request(tmp_path, timestamp):
     from fogtools.sky import build_icon_request_for_nwcsaf
-    t = pandas.Timestamp("20200224120000")
     s = build_icon_request_for_nwcsaf(tmp_path, timestamp)
     assert b"'" not in s
+
+
+def test_make_icon_request_allday(tmp_path, timestamp):
+    from fogtools.sky import sky_get_icon_for_day
+    sky_get_icon_for_day(
+            tmp_path,
+            timestamp.to_period(freq="D"))
+    with pytest.raises(ValueError):
+        sky_get_icon_for_day(
+                tmp_path,
+                timestamp.to_period(freq="H"))
 
 
 @mock.patch("subprocess.run", autospec=True)
@@ -129,9 +149,34 @@ def test_send_to_sky(sr):
         send_to_sky(b"tofu")
 
 
+def test_verify_period():
+    from fogtools.sky import verify_period
+    with pytest.raises(ValueError) as e:
+        verify_period(pandas.Period("2010"))
+    assert "exceeds 5 days" in e.value.args[0]
+    with pytest.raises(ValueError) as e:
+        verify_period(pandas.Period("2010-01-01T03:00:00"))
+    assert "hour must be" in e.value.args[0]
+    with pytest.raises(ValueError) as e:
+        verify_period(pandas.Period("2010-01-01T06:07:08"))
+    assert "must be whole hour" in e.value.args[0]
+
+
+def test_period2daterange():
+    from fogtools.sky import period2daterange
+    p = pandas.Period("1985-08-13")
+    dr = period2daterange(p)
+    assert dr.size == 4
+    assert [d.hour for d in dr] == [0, 6, 12, 18]
+    p = pandas.Period("1985-08-13T12")
+    dr = period2daterange(p)
+    assert dr.size == 1
+    assert dr[0] == pandas.Timestamp("1985-08-13T12")
+
+
 @mock.patch("subprocess.run", autospec=True)
-def test_get_and_send(sr, timestamp):
+def test_get_and_send(sr, period):
     from fogtools.sky import get_and_send, SkyFailure
     with pytest.raises(SkyFailure):
-        get_and_send(pathlib.Path("/tmp/lentils"), timestamp)
+        get_and_send(pathlib.Path("/tmp/lentils"), period)
     sr.assert_called_once()

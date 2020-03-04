@@ -45,7 +45,7 @@ def get_time_from_fn(fn):
     return pandas.to_datetime(m[0], format="_s%Y%j%H%M%S%f_")
 
 
-def download_abi_day(dt, chans=fogpy_abi_channels|nwcsaf_abi_channels,
+def download_abi_day(dt, chans=fogpy_abi_channels | nwcsaf_abi_channels,
                      tps="C"):
     """Download ABI for day
 

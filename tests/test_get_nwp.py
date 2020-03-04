@@ -15,16 +15,18 @@ def test_get_parser(ap):
 
 
 @patch("fogtools.processing.get_nwp.get_parser", autospec=True)
-@patch("fogtools.sky.get_and_send", autospec=True)
-def test_main(fsg, fpgg, tmpdir):
+@patch("subprocess.run", autospec=True)
+def test_main(sr, fpgg, tmpdir):
     import fogtools.processing.get_nwp
-    fpgg.return_value.parse_args.return_value.date = pandas.Timestamp(
+    from fogtools.sky import SkyFailure
+    fpgg.return_value.parse_args.return_value.date = pandas.Period(
             "19000101120000")
     with pytest.raises(SystemExit):
         fogtools.processing.get_nwp.main()
     os.environ["SAFNWC"] = str(tmpdir)
     fpgg.reset_mock()
-    fogtools.processing.get_nwp.main()
+    # expecting failure because files not actually written
+    with pytest.raises(SkyFailure):
+        fogtools.processing.get_nwp.main()
     fpgg.assert_called_once_with()
-    fsg.assert_called_once_with(str(tmpdir), pandas.Timestamp(
-        "19000101120000"))
+    sr.assert_called_once()

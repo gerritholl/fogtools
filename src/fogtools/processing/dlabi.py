@@ -20,7 +20,7 @@ def get_parser():
     parser.add_argument(
             "--channels", action="store", type=int,
             nargs="+",
-            default=abi.fogpy_abi_channels|abi.nwcsaf_abi_channels,
+            default=abi.fogpy_abi_channels | abi.nwcsaf_abi_channels,
             help="Channels to download")
 
     parser.add_argument(
