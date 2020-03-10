@@ -59,7 +59,7 @@ class RequestBuilder:
              40000, 50000, 70000, 85000, 92500, 100000]
     surf_props_t0 = ["HSURF", "FR_LAND"]
     surf_props_tx = ["T_2M", "TD_2M", "PS", "T_G", "TQV", "RELHUM_2M",
-                     "QV_2M"]
+                     "QV_2M", "HSURF"]
     lvl_props = ["T", "RELHUM", "FI", "U", "V"]
 
     def __init__(self, base):

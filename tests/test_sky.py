@@ -93,7 +93,7 @@ def test_surf_forc_props(rb, timestamp):
     assert t[1][0].text == "03"
     assert t[2][0].text == "T_2M"
     assert t[2][6].text == "QV_2M"
-    assert len(t[2]) == 7
+    assert len(t[2]) == 8
 
 
 def test_level_props(rb, timestamp):
