@@ -93,7 +93,7 @@ def test_surf_forc_props(rb, timestamp):
     assert t[1][0].text == "03"
     assert t[2][0].text == "T_2M"
     assert t[2][6].text == "QV_2M"
-    assert len(t[2]) == 8
+    assert len(t[2]) == 7
 
 
 def test_level_props(rb, timestamp):
@@ -113,12 +113,23 @@ def test_get_request(rb, tmp_path, timestamp):
              timestamp.replace(year=1800)])
     assert all([x.tag.endswith("read") for x in t])
     assert t[0][0][0][0].text == "20200224120000"
+    assert t[0][3][0].get("name").endswith("2020-02-24T12:00:00Z_000.grib")
     assert t[8][3][0].get("name") == str(
             tmp_path / "import" / "NWP_data" /
             "S_NWC_NWP_2020-02-24T12:00:00Z_003.grib")
     assert len(t) == 39
     assert all([t[i][0][0][0].text == "20420224120000"
                 for i in range(13, 26)])
+    assert len(t[0][0][2]) == 2
+    assert t[3][0][1][0].text == "00"
+    assert len(t[3][0][2]) == 2
+    assert t[3][1][1][0].text == "01"
+    assert len(t[3][1][2]) == 7
+    assert t[3][4][0].get("name").endswith("001.grib")
+    assert t[12][0][1][0].text == "05"
+    assert t[13][0][0][0].text == "20420224120000"
+    assert t[13][3][0].get("name").endswith("2042-02-24T12:00:00Z_000.grib")
+    assert t[16][4][0].get("name").endswith("2042-02-24T12:00:00Z_001.grib")
 
 
 def test_make_icon_request(tmp_path, timestamp):

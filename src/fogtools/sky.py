@@ -59,7 +59,7 @@ class RequestBuilder:
              40000, 50000, 70000, 85000, 92500, 100000]
     surf_props_t0 = ["HSURF", "FR_LAND"]
     surf_props_tx = ["T_2M", "TD_2M", "PS", "T_G", "TQV", "RELHUM_2M",
-                     "QV_2M", "HSURF"]
+                     "QV_2M"]
     lvl_props = ["T", "RELHUM", "FI", "U", "V"]
 
     def __init__(self, base):
@@ -234,7 +234,7 @@ class RequestBuilder:
                 self.edition(),
                 category=self.skycat)
 
-    def select_read_store_forc(self, start_time, s, mode):
+    def select_read_store_forc(self, start_time, s, modes):
         """Construct XML tree for reading stuff
 
         Construct an XML tree to read stuff.  See Sky Handbuch §3.2.
@@ -246,14 +246,17 @@ class RequestBuilder:
                 Time for analysis / forecast run
             s (int)
                 Forecast step in hours
-            mode (str)
-                Can be ``"surf_anal"``, ``"surf_forc"``, or ``"level"``.
+            modes (str)
+                Can be multiple of ``"surf_anal"``, ``"surf_forc"``, or
+                ``"level"``.  To get fields from last analysys into forecast,
+                pass both ``"surf_anal"`` and ``"surf_forc"``.
 
         Returns: lxml.etree.Element
         """
 
         return self.E.read(
-                getattr(self, f"select_{mode:s}_props")(start_time, s),
+                *[getattr(self, f"select_{mode:s}_props")(start_time, s)
+                    for mode in modes],
                 self.sort_order(),
                 self.result(),
                 self.transfer(start_time, s),
@@ -272,10 +275,10 @@ class RequestBuilder:
         reqs = []
         for start_time in start_times:
             reqs.append(self.select_read_store_forc(
-                start_time, 0, "surf_anal"))
+                start_time, 0, ["surf_anal"]))
             reqs.extend(itertools.chain(*((
-                    self.select_read_store_forc(start_time, i, "surf_forc"),
-                    self.select_read_store_forc(start_time, i, "level"))
+                    self.select_read_store_forc(start_time, i, ["surf_anal", "surf_forc"]),
+                    self.select_read_store_forc(start_time, i, ["level"]))
                         for i in range(6))))
         return self.E.requestCollection(
                 *reqs,
