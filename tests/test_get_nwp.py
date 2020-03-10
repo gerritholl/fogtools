@@ -21,6 +21,7 @@ def test_main(sr, fpgg, tmpdir):
     from fogtools.sky import SkyFailure
     fpgg.return_value.parse_args.return_value.date = pandas.Period(
             "19000101120000")
+    os.environ.pop("SAFNWC", None)
     with pytest.raises(SystemExit):
         fogtools.processing.get_nwp.main()
     os.environ["SAFNWC"] = str(tmpdir)
