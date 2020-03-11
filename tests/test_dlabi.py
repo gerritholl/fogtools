@@ -19,7 +19,7 @@ def test_main(fad, fpdg):
     fpdg.return_value.parse_args.return_value.date = pandas.Timestamp(
             "1900-01-01")
     fpdg.return_value.parse_args.return_value.channels = [1, 2, 3]
-    fpdg.return_value.parse_args.return_value.type = "C"
+    fpdg.return_value.parse_args.return_value.types = "CF"
     fogtools.processing.dlabi.main()
     fad.assert_called_once_with(
-            pandas.Timestamp("1900-01-01"), [1, 2, 3], "C")
+            pandas.Timestamp("1900-01-01"), [1, 2, 3], "CF")

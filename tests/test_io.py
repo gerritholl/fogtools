@@ -1,5 +1,6 @@
 import tempfile
 import os
+import pathlib
 
 
 def test_cache_dir():
@@ -23,9 +24,10 @@ def test_cache_dir():
         os.environ.update(_environ)
     try:
         _environ = os.environ.copy()
-        os.environ["XDG_CACHE_HOME"] = os.environ.get("TMPDIR", "/tmp")
+        pt = pathlib.Path(os.environ.get("TMPDIR", "/tmp/"))
+        os.environ["XDG_CACHE_HOME"] = str(pt)
         d = get_cache_dir()
-        assert str(d.parent) == "/tmp"
+        assert d.parent == pt
         assert d.name == "fogtools"
     finally:
         try:

@@ -22,10 +22,13 @@ def test_s3_select(sS):
     from fogtools.abi import s3_select
     t1 = pandas.Timestamp("2020-03-01T12")
     sS.return_value.glob.return_value = iter("tempeh")
-    g = s3_select(t1, 10)
-    next(g)
-    sS.return_value.glob.assert_called_once_with(
-            "s3://noaa-goes16/ABI-L1b-RadC/2020/061/12/*C10*")
+    g1 = s3_select(t1, 10, "C")
+    g2 = s3_select(t1, 10, "F")
+    next(g1)
+    next(g2)
+    sS.return_value.glob.assert_has_calls([
+        call("s3://noaa-goes16/ABI-L1b-RadC/2020/061/12/*C10*"),
+        call("s3://noaa-goes16/ABI-L1b-RadF/2020/061/12/*C10*")])
 
 
 def test_get_dl_dest():
@@ -50,14 +53,23 @@ def test_download_abi(sS):
            "noaa-goes16/ABI-L1b-RadC/2017/059/01/OR_ABI-L1b-RadC-M3C12_G16_"
            "s20170590122505_e20170590125283_c20170590125314.nc",
            "noaa-goes16/ABI-L1b-RadC/2017/059/06/OR_ABI-L1b-RadC-M3C03_G16_"
-           "s20170590627505_e20170590630278_c20170590630319.nc"]
-    sS.return_value.glob.side_effect = lambda *a: iter(ref)
+           "s20170590627505_e20170590630278_c20170590630319.nc",
+           "noaa-goes16/ABI-L1b-RadF/2017/059/17/OR_ABI-L1b-RadF-M3C09_G16_"
+           "s20170591751089_e20170591801462_c20170591801522.nc"]
+
+    def fake_glob(pattern):
+        if "RadC" in pattern:
+            return iter(ref[:3])
+        elif "RadF" in pattern:
+            return iter(ref[3:4])
+    sS.return_value.glob.side_effect = fake_glob
     with tempfile.TemporaryDirectory() as td, \
             patch("fogtools.io.get_cache_dir", autospec=True) as fig:
         ptd = pathlib.Path(td)
         fig.return_value = ptd
-        download_abi_day(t1, [1, 2, 3])
-        assert sS.return_value.get.call_count == 24 * 3 * 3
+        download_abi_day(t1, [1, 2, 3], "CF")
+        # a selection for each hour (24), each channel (3), each file (4)
+        assert sS.return_value.get.call_count == 24 * 3 * 4
         sS.return_value.get.assert_has_calls([
             call("s3://" + ref[0],
                  ptd / "abi" / "2017" / "02" / "28" / "00" / "02" /
@@ -67,7 +79,10 @@ def test_download_abi(sS):
                  "2" / ref[1].split("/")[-1]),
             call("s3://" + ref[2],
                  ptd / "abi" / "2017" / "02" / "28" / "06" / "27" /
-                 "3" / ref[2].split("/")[-1])],
+                 "3" / ref[2].split("/")[-1]),
+            call("s3://" + ref[3],
+                 ptd / "abi" / "2017" / "02" / "28" / "17" / "51" /
+                 "1" / ref[3].split("/")[-1])],
             any_order=True)
     with tempfile.NamedTemporaryFile() as ntf, \
             patch("fogtools.abi.get_dl_dest", autospec=True) as fag:

@@ -15,13 +15,14 @@ def get_parser():
             formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
     parser.add_argument(
-            "date", action="store", type=pandas.Timestamp,
-            help="Date to download")
+            "date", action="store", type=pandas.Period,
+            help="Date to download, ISO 8601 format")
 
     return parser
 
 
 def getnwp(dt):
+    sky.verify_period(dt)
     safnwc = os.getenv("SAFNWC")
     if not safnwc:
         sys.exit("Environment variable SAFNWC not set, exiting")
