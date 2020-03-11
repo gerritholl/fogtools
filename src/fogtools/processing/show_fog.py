@@ -14,9 +14,9 @@ def get_parser():
             formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
     parser.add_argument(
-            "--seviri", action="store", type=str,
+            "--sat", action="store", type=str,
             nargs="+", required=True,
-            help="List of SEVIRI files")
+            help="List of satellite files")
 
     parser.add_argument(
             "--nwcsaf", action="store", type=str,
@@ -37,6 +37,11 @@ def get_parser():
             "-e", "--extra", action="store", type=str,
             help="File to which to store extra information")
 
+    parser.add_argument(
+            "-m", "--mode", type=str, action="store",
+            default="seviri_l1b_hrit", choices=["abi_l1b", "seviri_l1b_hrit"],
+            help="Which satellite to use")
+
     return parser
 
 
@@ -48,8 +53,9 @@ def main():
     from satpy.utils import debug_on
     debug_on()
     p = parse_cmdline()
-    rv = vis.get_fog_blend_from_seviri_nwcsaf(
-            p.seviri,
+    im = vis.get_fog_blend_for_sat(
+            p.mode,
+            p.sat,
             p.nwcsaf,
             p.area,
             "overview",
