@@ -1,0 +1,54 @@
+new-england-500:
+  description: New England, 500 metre
+  projection:
+    proj: eqc
+    ellps: WGS84
+    units: m
+  shape:
+    width: 3588
+    height: 2339
+  area_extent:
+    lower_left_xy: [-9163411, 4255208]
+    upper_right_xy: [-7369792, 5424479]
+
+
+new-england-1000:
+  description: New England, 1000 metre
+  projection:
+    proj: eqc
+    ellps: WGS84
+    units: m
+  shape:
+    width: 1794
+    height: 1170
+  area_extent:
+    lower_left_xy: [-9163411, 4255208]
+    upper_right_xy: [-7369792, 5424479]
+
+
+new-england-2000:
+  description: New England, 2000 metre
+  projection:
+    proj: eqc
+    ellps: WGS84
+    units: m
+  shape:
+    width: 897
+    height: 585
+  area_extent:
+    lower_left_xy: [-9163411, 4255208]
+    upper_right_xy: [-7369792, 5424479]
+
+
+new-england-3000:
+  description: New England, 3000 metre
+  projection:
+    proj: eqc
+    ellps: WGS84
+    units: m
+  shape:
+    width: 598
+    height: 390
+  area_extent:
+    lower_left_xy: [-9163411, 4255208]
+    upper_right_xy: [-7369792, 5424479]
