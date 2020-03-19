@@ -47,7 +47,7 @@ def get_fog_blend_for_sat(sensorreader, fl_sat, fl_nwcsaf, area, other):
                                         sensors=[sensor])
     areas = sattools.ptc.get_all_areas(["satpy", "fcitools", "fogtools"])
     sc.load(["cmic_reff", "cmic_lwp", "cmic_cot", "overview"] + D[sensorreader])
-    ls = sc.resample(area)
+    ls = sc.resample(areas[area])
     ls.load(["fls_day", "fls_day_extra"], unload=False)
 
     return blend_fog(ls, other)
