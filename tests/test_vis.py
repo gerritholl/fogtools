@@ -29,7 +29,7 @@ def test_fog_blend(xrda):
     # later, I should do some proper tests of the values here
 
 
-@patch("satpy.Scene", autospec=True)
+@patch("satpy.Scene")
 @patch("fogtools.vis.blend_fog", autospec=True)
 def test_get_fog_blend_from_seviri(fvb, sS, xrda):
     from fogtools.vis import get_fog_blend_from_seviri_nwcsaf

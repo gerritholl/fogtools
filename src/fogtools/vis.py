@@ -7,6 +7,7 @@ import trollimage.xrimage
 import trollimage.colormap
 
 import xarray
+import sattools.ptc
 
 
 def blend_fog(sc, other="overview"):
@@ -32,16 +33,20 @@ def blend_fog(sc, other="overview"):
     return blend
 
 
-def get_fog_blend_for_sat(sat, fl_sat, fl_nwcsaf, area, other):
+def get_fog_blend_for_sat(sensorreader, fl_sat, fl_nwcsaf, area, other):
     sc = satpy.Scene(
-        filenames={sat: fl_sat,
+        filenames={sensorreader: fl_sat,
                    "nwcsaf-geo": fl_nwcsaf})
 
     D = {"seviri_l1b_hrit": ["IR_108", "IR_087", "IR_016", "VIS006",
                              "IR_120", "VIS008", "IR_039"],
          "abi_l1b": ["C02", "C03", "C05", "C07", "C11", "C14", "C15"]}
 
-    sc.load(["cmic_reff", "cmic_lwp", "cmic_cot", "overview"] + D[sat])
+    sensor = sensorreader.split("_")[0]
+    sattools.ptc.add_all_pkg_comps_mods(sc, ["satpy", "fogpy"],
+                                        sensors=[sensor])
+    areas = sattools.ptc.get_all_areas(["satpy", "fcitools", "fogtools"])
+    sc.load(["cmic_reff", "cmic_lwp", "cmic_cot", "overview"] + D[sensorreader])
     ls = sc.resample(area)
     ls.load(["fls_day", "fls_day_extra"], unload=False)
 
