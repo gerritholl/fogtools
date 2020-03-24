@@ -4,7 +4,7 @@
 import numpy
 import xarray
 import pytest
-from unittest.mock import patch
+from unittest.mock import patch, sentinel
 
 
 @pytest.fixture
@@ -31,10 +31,22 @@ def test_fog_blend(xrda):
 
 @patch("satpy.Scene", autospec=True)
 @patch("fogtools.vis.blend_fog", autospec=True)
-def test_get_fog_blend_from_seviri(sS, fvb, xrda):
+def test_get_fog_blend_from_seviri(fvb, sS, xrda):
     from fogtools.vis import get_fog_blend_from_seviri_nwcsaf
     sS.return_value["overview"] = xrda[0]
     sS.return_value["fls_day"] = xrda[1]
-    get_fog_blend_from_seviri_nwcsaf(
+    sS.return_value.resample.return_value.\
+        __getitem__.return_value = sentinel.tempeh
+    fvb.return_value = sentinel.tofu
+    rv = get_fog_blend_from_seviri_nwcsaf(
             ["a", "b", "c"],
             ["d", "e", "f"])
+    fvb.assert_called_once()
+    assert rv is sentinel.tofu
+    rv2 = get_fog_blend_from_seviri_nwcsaf(
+            ["a", "b", "c"],
+            ["d", "e", "f"],
+            return_extra=True)
+    assert len(rv2) == 2
+    assert rv2[0] is sentinel.tofu
+    assert rv2[1] is sentinel.tempeh
