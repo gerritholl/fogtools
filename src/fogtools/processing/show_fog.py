@@ -32,6 +32,10 @@ def get_parser():
             default="eurol",
             help="Area for which to generate image")
 
+    parser.add_argument(
+            "-e", "--extra", action="store", type=str,
+            help="File to which to store extra information")
+
     return parser
 
 
@@ -43,9 +47,15 @@ def main():
     from satpy.utils import debug_on
     debug_on()
     p = parse_cmdline()
-    im = vis.get_fog_blend_from_seviri_nwcsaf(
+    rv = vis.get_fog_blend_from_seviri_nwcsaf(
             p.seviri,
             p.nwcsaf,
             p.area,
-            "overview")
+            "overview",
+            return_extra=p.extra is not None)
+    if p.extra is not None:
+        (im, ex) = rv
+        ex.to_netcdf(p.extra)
+    else:
+        im = rv
     im.save(p.outfile)
