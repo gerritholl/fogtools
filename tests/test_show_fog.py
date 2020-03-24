@@ -1,10 +1,7 @@
 """Test the show-fog script
 """
 
-import os
 from unittest.mock import patch
-import pandas
-import pytest
 
 
 @patch("argparse.ArgumentParser", autospec=True)
