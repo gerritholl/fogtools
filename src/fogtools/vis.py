@@ -36,7 +36,8 @@ def get_fog_blend_from_seviri_nwcsaf(
         fl_sev,
         fl_nwcsaf,
         area="eurol",
-        other="overview"):
+        other="overview",
+        return_extra=False):
     """Create a blended fog image with fogpy from NWCSAF and SEVIRI
 
     Get an image where fog is calculated for the scene and where this is then
@@ -55,10 +56,14 @@ def get_fog_blend_from_seviri_nwcsaf(
             Area on which to respample.  Defaults to "eurol".
         other (Optional[str]):
             Background composite.  Defaults to "overview".
+        return_extra (Optional[bool]):
+            Also return dataset with extra information from the
+            fogpy `"fls_day_extra"` "composite".  Defaults to false.
 
     Returns:
 
         XRImage with fog blended on top of op background.
+        If ``return_extras`` is True, also return dataset with extras.
     """
 
     sc = satpy.Scene(
@@ -69,4 +74,8 @@ def get_fog_blend_from_seviri_nwcsaf(
     ls = sc.resample(area)
     ls.load(["fls_day", "fls_day_extra"], unload=False)
 
-    return blend_fog(ls, other)
+    blend = blend_fog(ls, other)
+    if return_extra:
+        return (blend, ls["fls_day_extra"])
+    else:
+        return blend
