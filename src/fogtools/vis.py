@@ -76,6 +76,6 @@ def get_fog_blend_from_seviri_nwcsaf(
 
     blend = blend_fog(ls, other)
     if return_extra:
-        return (blend, ls["fls_day_extra"])
+        return (blend, ls)
     else:
         return blend
