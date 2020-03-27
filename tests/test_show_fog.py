@@ -36,5 +36,6 @@ def test_main(fcS, fvg, fpsg, tmpdir):
     fogtools.processing.show_fog.main()
     fcS.return_value.save_datasets.assert_called_once_with(
             writer="cf",
-            datasets=fvg.return_value[1].__getitem__.return_value.data_vars.keys.return_value,
+            datasets=fvg.return_value[1].__getitem__
+                        .return_value.data_vars.keys.return_value,
             filename="shadowlands.nc")
