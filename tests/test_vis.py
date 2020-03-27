@@ -35,8 +35,6 @@ def test_get_fog_blend_from_seviri(fvb, sS, xrda):
     from fogtools.vis import get_fog_blend_from_seviri_nwcsaf
     sS.return_value["overview"] = xrda[0]
     sS.return_value["fls_day"] = xrda[1]
-    sS.return_value.resample.return_value.\
-        __getitem__.return_value = sentinel.tempeh
     fvb.return_value = sentinel.tofu
     rv = get_fog_blend_from_seviri_nwcsaf(
             ["a", "b", "c"],
@@ -49,4 +47,4 @@ def test_get_fog_blend_from_seviri(fvb, sS, xrda):
             return_extra=True)
     assert len(rv2) == 2
     assert rv2[0] is sentinel.tofu
-    assert rv2[1] is sentinel.tempeh
+    assert rv2[1] is sS.return_value.resample.return_value
