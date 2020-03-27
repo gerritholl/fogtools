@@ -57,7 +57,7 @@ def get_fog_blend_from_seviri_nwcsaf(
         other (Optional[str]):
             Background composite.  Defaults to "overview".
         return_extra (Optional[bool]):
-            Also return dataset with extra information from the
+            Also return scene with extra information from the
             fogpy `"fls_day_extra"` "composite".  Defaults to false.
 
     Returns:
@@ -76,6 +76,6 @@ def get_fog_blend_from_seviri_nwcsaf(
 
     blend = blend_fog(ls, other)
     if return_extra:
-        return (blend, ls["fls_day_extra"])
+        return (blend, ls)
     else:
         return blend

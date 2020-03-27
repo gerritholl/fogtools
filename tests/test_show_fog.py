@@ -13,7 +13,8 @@ def test_get_parser(ap):
 
 @patch("fogtools.processing.show_fog.get_parser", autospec=True)
 @patch("fogtools.vis.get_fog_blend_from_seviri_nwcsaf", autospec=True)
-def test_main(fvg, fpsg, tmpdir):
+@patch("fogpy.composites.Scene", autospec=True)
+def test_main(fcS, fvg, fpsg, tmpdir):
     import fogtools.processing.show_fog
     fpsg.return_value.parse_args.return_value.seviri = ["/no/seviri/files"]
     fpsg.return_value.parse_args.return_value.nwcsaf = ["/no/nwcsaf/files"]
@@ -30,8 +31,11 @@ def test_main(fvg, fpsg, tmpdir):
             return_extra=False)
     fvg.return_value.save.assert_called_once_with("/no/out/file")
     fvg.reset_mock()
-    fpsg.return_value.parse_args.return_value.extra = "shadowlands"
+    fpsg.return_value.parse_args.return_value.extra = "shadowlands.nc"
     fvg.return_value = (MagicMock(), MagicMock())
     fogtools.processing.show_fog.main()
-    fvg.return_value[1].to_netcdf.assert_called_once_with(
-            "shadowlands")
+    fcS.return_value.save_datasets.assert_called_once_with(
+            writer="cf",
+            datasets=fvg.return_value[1].__getitem__
+                        .return_value.data_vars.keys.return_value,
+            filename="shadowlands.nc")

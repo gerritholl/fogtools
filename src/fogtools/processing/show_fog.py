@@ -5,6 +5,7 @@ Given NWCSAF and SEVIRI files, write file with fog image
 
 import argparse
 from .. import vis
+import fogpy.composites
 
 
 def get_parser():
@@ -55,7 +56,7 @@ def main():
             return_extra=p.extra is not None)
     if p.extra is not None:
         (im, ex) = rv
-        ex.to_netcdf(p.extra)
+        fogpy.composites.save_extras(ex, p.extra)
     else:
         im = rv
     im.save(p.outfile)
