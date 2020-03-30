@@ -86,13 +86,13 @@ def dl_usgs_dem(lat, lon, out_dir, overwrite=False):
         fn = src_uri.split("/")[-1]
         out = out_dir / fn
         if not overwrite and out.exists():
-            logging.info(f"Already exists: {out!s}")
+            logger.info(f"Already exists: {out!s}")
             continue
         logger.info(f"Downloading {src_uri!s} to {out!s}")
         try:
             urllib.request.urlretrieve(src_uri, out)
         except Exception:
-            logging.error("Something went wrong downloading "
+            logger.error("Something went wrong downloading "
                           f"{src_uri!s} to {out!s}, deleting partial file")
             out.unlink(missing_ok=True)
             raise
@@ -109,7 +109,7 @@ def dl_usgs_dem_in_range(lat_from, lat_to, lon_from, lon_to, basedir_out):
             try:
                 dl_usgs_dem(lat, lon, out_dir)
             except urllib.error.HTTPError as err:
-                logging.error(f"Could not download for {lat:d}, {lon:d}: " +
+                logger.error(f"Could not download for {lat:d}, {lon:d}: " +
                               f"Error {err.code:d}: {err.reason:s}")
                 try:
                     out_dir.rmdir()
