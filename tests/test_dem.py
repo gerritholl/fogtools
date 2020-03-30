@@ -1,6 +1,8 @@
 import pathlib
 import pytest
 import unittest.mock
+import logging
+import urllib.error
 
 
 @pytest.fixture
@@ -48,26 +50,52 @@ def test_get_out_dir():
 
 
 @unittest.mock.patch("urllib.request.urlretrieve", autospec=True)
-def test_dl_usgs_dem(uru, b):
+def test_dl_usgs_dem(uru, b, tmpdir, caplog):
     from fogtools.dem import dl_usgs_dem
-    dl_usgs_dem(10, 20, pathlib.Path("/fake"))
+    ptd = pathlib.Path(tmpdir)
+    f1 = ptd / "USGS_1_n10e020.tif"
+    f2 = ptd / "n10e020.gpkg"
+    dl_usgs_dem(10, 20, ptd)
     assert uru.call_count == 4
     uru.assert_has_calls([
-        unittest.mock.call(
-            b + "n10e020/USGS_1_n10e020.tif",
-            pathlib.Path("/fake/USGS_1_n10e020.tif")),
-        unittest.mock.call(
-            b + "n10e020/n10e020.gpkg",
-            pathlib.Path("/fake/n10e020.gpkg"))],
+        unittest.mock.call(b + "n10e020/USGS_1_n10e020.tif", f1),
+        unittest.mock.call(b + "n10e020/n10e020.gpkg", f2)],
         any_order=True)
+    f1.touch(exist_ok=False)
+    f2.touch(exist_ok=False)
+    with caplog.at_level(logging.INFO):
+        dl_usgs_dem(10, 20, ptd)
+        assert caplog.text.count("Already exists") == 2
+
+    class DummyException(Exception):
+        pass
+
+    uru.side_effect = DummyException
+    with pytest.raises(DummyException), caplog.at_level(logging.ERROR):
+        dl_usgs_dem(10, 20, ptd)
+        assert caplog.text.count("Something went wrong") == 4
 
 
 @unittest.mock.patch("urllib.request.urlretrieve", autospec=True)
-def test_dl_usgs_dem_in_range(uru, b):
+def test_dl_usgs_dem_in_range(uru, b, tmpdir):
     from fogtools.dem import dl_usgs_dem_in_range
-    dl_usgs_dem_in_range(-10, 10, -10, 10, pathlib.Path("/fake"))
-    assert uru.call_count == 20*20*4
+    ptd = pathlib.Path(tmpdir)
+    dl_usgs_dem_in_range(-2, 2, -2, 2, ptd)
+    assert uru.call_count == 4*4*4
+    assert (ptd / "n01e001").exists()
+    assert (ptd / "n01e001").is_dir()
     uru.assert_has_calls([
         unittest.mock.call(
-            b + "n05e005/n05e005.gpkg",
-            pathlib.Path("/fake/n05e005/n05e005.gpkg"))])
+            b + "n01e001/n01e001.gpkg",
+            ptd / "n01e001" / "n01e001.gpkg")])
+    http404 = urllib.error.HTTPError("url", 404, "not found", None, None)
+    uru.side_effect = http404
+    dl_usgs_dem_in_range(-1, 1, -1, 1, ptd)
+    # try to trigger OSError that is not ENOTEMPTY
+
+    def side_effect(src_uri, out):
+        out.parent.rmdir()
+        raise http404
+    uru.side_effect = side_effect
+    with pytest.raises(FileNotFoundError):
+        dl_usgs_dem_in_range(-1, 1, -1, 1, ptd)
