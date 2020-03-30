@@ -93,7 +93,7 @@ def dl_usgs_dem(lat, lon, out_dir, overwrite=False):
             urllib.request.urlretrieve(src_uri, out)
         except Exception:
             logger.error("Something went wrong downloading "
-                          f"{src_uri!s} to {out!s}, deleting partial file")
+                         f"{src_uri!s} to {out!s}, deleting partial file")
             out.unlink(missing_ok=True)
             raise
 
@@ -110,7 +110,7 @@ def dl_usgs_dem_in_range(lat_from, lat_to, lon_from, lon_to, basedir_out):
                 dl_usgs_dem(lat, lon, out_dir)
             except urllib.error.HTTPError as err:
                 logger.error(f"Could not download for {lat:d}, {lon:d}: " +
-                              f"Error {err.code:d}: {err.reason:s}")
+                             f"Error {err.code:d}: {err.reason:s}")
                 try:
                     out_dir.rmdir()
                 except OSError as oerr:
