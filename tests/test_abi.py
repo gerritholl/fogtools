@@ -44,9 +44,9 @@ def test_get_dl_dest():
 
 
 @patch("s3fs.S3FileSystem", autospec=True)
-def test_download_abi(sS):
+def test_download_abi(sS, tmp_path):
     from fogtools.abi import download_abi_day
-    from fogtools.io import get_cache_dir
+    from sattools.io import get_cache_dir
     t1 = pandas.Timestamp("2020-03-01T12")
     ref = ["noaa-goes16/ABI-L1b-RadC/2017/059/00/OR_ABI-L1b-RadC-M3C12_G16_"
            "s20170590002505_e20170590005283_c20170590005323.nc",
@@ -63,32 +63,30 @@ def test_download_abi(sS):
         elif "RadF" in pattern:
             return iter(ref[3:4])
     sS.return_value.glob.side_effect = fake_glob
-    with tempfile.TemporaryDirectory() as td, \
-            patch("fogtools.io.get_cache_dir", autospec=True) as fig:
-        ptd = pathlib.Path(td)
-        fig.return_value = ptd
+    with patch("sattools.io.get_cache_dir", autospec=True) as fig:
+        fig.return_value = tmp_path
         download_abi_day(t1, [1, 2, 3], "CF")
         # a selection for each hour (24), each channel (3), each file (4)
         assert sS.return_value.get.call_count == 24 * 3 * 4
         sS.return_value.get.assert_has_calls([
             call("s3://" + ref[0],
-                 ptd / "abi" / "2017" / "02" / "28" / "00" / "02" /
+                 tmp_path / "abi" / "2017" / "02" / "28" / "00" / "02" /
                  "1" / ref[0].split("/")[-1]),
             call("s3://" + ref[1],
-                 ptd / "abi" / "2017" / "02" / "28" / "01" / "22" /
+                 tmp_path / "abi" / "2017" / "02" / "28" / "01" / "22" /
                  "2" / ref[1].split("/")[-1]),
             call("s3://" + ref[2],
-                 ptd / "abi" / "2017" / "02" / "28" / "06" / "27" /
+                 tmp_path / "abi" / "2017" / "02" / "28" / "06" / "27" /
                  "3" / ref[2].split("/")[-1]),
             call("s3://" + ref[3],
-                 ptd / "abi" / "2017" / "02" / "28" / "17" / "51" /
+                 tmp_path / "abi" / "2017" / "02" / "28" / "17" / "51" /
                  "1" / ref[3].split("/")[-1])],
             any_order=True)
     with tempfile.NamedTemporaryFile() as ntf, \
             patch("fogtools.abi.get_dl_dest", autospec=True) as fag:
         fag.return_value = pathlib.Path(ntf.name)
         download_abi_day(t1, [1, 2, 3])
-        cd = get_cache_dir()
+        cd = get_cache_dir(subdir="fogtools")
         fag.assert_has_calls([
             call(cd, pandas.Timestamp("2017-02-28T00:02:50.5"), 2, ref[0]),
             call(cd, pandas.Timestamp("2017-02-28T01:22:50.5"), 1, ref[1]),

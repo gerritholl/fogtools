@@ -10,7 +10,7 @@ import pandas
 import lxml.etree
 import lxml.builder
 
-from . import io as ftio
+from sattools import io as stio
 
 logger = logging.getLogger(__name__)
 
@@ -137,8 +137,8 @@ class RequestBuilder:
         """
         fn_name = make_icon_nwcsaf_filename(
                         self.base, start_time, fs)
-        hitFile = ftio.get_cache_dir() / "ihits"
-        infoFile = ftio.get_cache_dir() / "info"
+        hitFile = stio.get_cache_dir(subdir="fogtools") / "ihits"
+        infoFile = stio.get_cache_dir(subdir="fogtools") / "info"
         ensure_parents_exist(fn_name, hitFile, infoFile)
         self.expected_output_files |= {fn_name, hitFile, infoFile}
         t = self.E.transfer(

@@ -5,7 +5,7 @@ import logging
 import matplotlib.pyplot
 from typhon.plots.common import write_multi
 from . import isd
-from . import io as ftio
+from sattools import io as stio
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +35,7 @@ class Visualiser:
         a.legend()
     #    a.set_xlim([0, 30])
     #    a.set_ylim([0, 150])
-        write_multi(f, ftio.plotdir() / name)
+        write_multi(f, stio.plotdir() / name)
 
     def plot_fog_dt_hist(self, name="dewpoint_2dhist"):
         """2-D histogram of visibility - delta-temperature
@@ -56,4 +56,4 @@ class Visualiser:
         a.set_xlabel("Visibility [m]")
         a.set_ylabel("T - T_d [K]")
         a.set_title(r"Joint distribution visibility vs. \Delta dewpoint")
-        write_multi(f, ftio.plotdir() / name)
+        write_multi(f, stio.plotdir() / name)
