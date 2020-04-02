@@ -10,7 +10,7 @@ import pandas
 import pkg_resources
 import pathlib
 
-from . import io as ftio
+from sattools import io as stio
 
 LOG = logging.getLogger(__name__)
 
@@ -126,7 +126,7 @@ def get_station(year, id_):
     # preserve dtypes: https://github.com/pandas-dev/pandas/issues/31497
     # and https://github.com/pandas-dev/pandas/issues/29752
 
-    cachedir = ftio.get_cache_dir()
+    cachedir = stio.get_cache_dir(subdir="fogtools")
     cachefile = (cachedir / str(year) / id_).with_suffix(".pkl")
     try:
         LOG.debug(f"Reading from cache: {cachefile!s}")
@@ -253,7 +253,7 @@ def create_db(f=None, start=pandas.Timestamp(2017, 1, 1),
     # TODO, this should merge the vis extraction
     stations = select_stations(get_stations())
     ids = get_station_ids(stations)
-    cachedir = ftio.get_cache_dir()
+    cachedir = stio.get_cache_dir(subdir="fogtools")
     f = pathlib.Path(f) if f is not None else (cachedir / "store.parquet")
     if not isinstance(start, pandas.Timestamp):
         start = pandas.Timestamp(start)
@@ -287,7 +287,7 @@ def read_db(f=None):
     """Read parquet DB
     """
 
-    cachedir = ftio.get_cache_dir()
+    cachedir = stio.get_cache_dir(subdir="fogtools")
     f = f or (cachedir / "store.parquet")
     return pandas.read_parquet(f)
 
