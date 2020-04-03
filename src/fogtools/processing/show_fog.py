@@ -53,7 +53,7 @@ def main():
     from satpy.utils import debug_on
     debug_on()
     p = parse_cmdline()
-    im = vis.get_fog_blend_for_sat(
+    rv = vis.get_fog_blend_for_sat(
             p.mode,
             p.sat,
             p.nwcsaf,
