@@ -33,7 +33,8 @@ def blend_fog(sc, other="overview"):
     return blend
 
 
-def get_fog_blend_for_sat(sensorreader, fl_sat, fl_nwcsaf, area, other):
+def get_fog_blend_for_sat(sensorreader, fl_sat, fl_nwcsaf, area, other,
+                          return_extra):
     sc = satpy.Scene(
         filenames={sensorreader: fl_sat,
                    "nwcsaf-geo": fl_nwcsaf})
@@ -50,7 +51,11 @@ def get_fog_blend_for_sat(sensorreader, fl_sat, fl_nwcsaf, area, other):
     ls = sc.resample(areas[area])
     ls.load(["fls_day", "fls_day_extra"], unload=False)
 
-    return blend_fog(ls, other)
+    blend = blend_fog(ls, other)
+    if return_extra:
+        return (blend, ls)
+    else:
+        return blend
 
 
 def get_fog_blend_from_seviri_nwcsaf(
@@ -87,12 +92,15 @@ def get_fog_blend_from_seviri_nwcsaf(
         If ``return_extras`` is True, also return dataset with extras.
     """
 
-    return get_fog_blend_for_sat("seviri_l1b_hrit", fl_sev, fl_nwcsaf, area, other)
+    return get_fog_blend_for_sat("seviri_l1b_hrit", fl_sev, fl_nwcsaf, area,
+                                 other, return_extra=return_extra)
 
 
 def get_fog_blend_from_abi_nwcsaf(
         fl_abi,
         fl_nwcsaf,
         area="new-england-1000",
-        other="overview"):
-    return get_fog_blend_for_sat("abi_l1b", fl_abi, fl_nwcsaf, area, other)
+        other="overview",
+        return_extra=False):
+    return get_fog_blend_for_sat("abi_l1b", fl_abi, fl_nwcsaf, area, other,
+                                 return_extra=return_extra)
