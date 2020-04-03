@@ -8,7 +8,7 @@ from unittest.mock import patch, MagicMock
 def test_get_parser(ap):
     import fogtools.processing.show_fog
     fogtools.processing.show_fog.get_parser()
-    assert ap.return_value.add_argument.call_count == 5
+    assert ap.return_value.add_argument.call_count == 6
 
 
 @patch("fogtools.processing.show_fog.get_parser", autospec=True)
