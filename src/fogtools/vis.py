@@ -7,6 +7,7 @@ import trollimage.xrimage
 import trollimage.colormap
 
 import xarray
+import sattools.ptc
 
 
 def blend_fog(sc, other="overview"):
@@ -30,6 +31,37 @@ def blend_fog(sc, other="overview"):
     RGBA = xarray.concat([im.data, Ap], dim="bands")
     blend = ov.blend(trollimage.xrimage.XRImage(RGBA))
     return blend
+
+
+def get_fog_blend_for_sat(sensorreader, fl_sat, fl_nwcsaf, area, other,
+                          return_extra):
+    sc = satpy.Scene(
+        filenames={sensorreader: fl_sat,
+                   "nwcsaf-geo": fl_nwcsaf})
+
+    D = {"seviri_l1b_hrit": ["IR_108", "IR_087", "IR_016", "VIS006",
+                             "IR_120", "VIS008", "IR_039"],
+         "abi_l1b": ["C02", "C03", "C05", "C07", "C11", "C14", "C15"]}
+
+    sensor = sensorreader.split("_")[0]
+    sattools.ptc.add_all_pkg_comps_mods(sc, ["satpy", "fogpy"],
+                                        sensors=[sensor])
+    areas = {}
+    for pkg in ["satpy", "fcitools", "fogtools"]:
+        try:
+            areas.update(sattools.ptc.get_all_areas([pkg]))
+        except ModuleNotFoundError:
+            pass
+    sc.load(["cmic_reff", "cmic_lwp", "cmic_cot", "overview"]
+            + D[sensorreader])
+    ls = sc.resample(areas[area])
+    ls.load(["fls_day", "fls_day_extra"], unload=False)
+
+    blend = blend_fog(ls, other)
+    if return_extra:
+        return (blend, ls)
+    else:
+        return blend
 
 
 def get_fog_blend_from_seviri_nwcsaf(
@@ -66,16 +98,15 @@ def get_fog_blend_from_seviri_nwcsaf(
         If ``return_extras`` is True, also return dataset with extras.
     """
 
-    sc = satpy.Scene(
-            filenames={"seviri_l1b_hrit": fl_sev,
-                       "nwcsaf-geo": fl_nwcsaf})
-    sc.load(["cmic_reff", "IR_108", "IR_087", "cmic_cot", "IR_016", "VIS006",
-             "IR_120", "VIS008", "cmic_lwp", "IR_039", "overview"])
-    ls = sc.resample(area)
-    ls.load(["fls_day", "fls_day_extra"], unload=False)
+    return get_fog_blend_for_sat("seviri_l1b_hrit", fl_sev, fl_nwcsaf, area,
+                                 other, return_extra=return_extra)
 
-    blend = blend_fog(ls, other)
-    if return_extra:
-        return (blend, ls)
-    else:
-        return blend
+
+def get_fog_blend_from_abi_nwcsaf(
+        fl_abi,
+        fl_nwcsaf,
+        area="new-england-1000",
+        other="overview",
+        return_extra=False):
+    return get_fog_blend_for_sat("abi_l1b", fl_abi, fl_nwcsaf, area, other,
+                                 return_extra=return_extra)
