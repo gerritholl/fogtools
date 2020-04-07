@@ -46,7 +46,12 @@ def get_fog_blend_for_sat(sensorreader, fl_sat, fl_nwcsaf, area, other,
     sensor = sensorreader.split("_")[0]
     sattools.ptc.add_all_pkg_comps_mods(sc, ["satpy", "fogpy"],
                                         sensors=[sensor])
-    areas = sattools.ptc.get_all_areas(["satpy", "fcitools", "fogtools"])
+    areas = {}
+    for pkg in ["satpy", "fcitools", "fogtools"]:
+        try:
+            areas.update(sattools.ptc.get_all_areas([pkg]))
+        except ModuleNotFoundError:
+            pass
     sc.load(["cmic_reff", "cmic_lwp", "cmic_cot", "overview"]
             + D[sensorreader])
     ls = sc.resample(areas[area])
