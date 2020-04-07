@@ -29,9 +29,10 @@ def test_fog_blend(xrda):
     # later, I should do some proper tests of the values here
 
 
+@patch("fogpy.composites.Scene")
 @patch("satpy.Scene")
 @patch("fogtools.vis.blend_fog", autospec=True)
-def test_get_fog_blend_from_seviri(fvb, sS, xrda):
+def test_get_fog_blend_from_seviri(fvb, sS, fcS, xrda):
     from fogtools.vis import get_fog_blend_from_seviri_nwcsaf
     sS.return_value["overview"] = xrda[0]
     sS.return_value["fls_day"] = xrda[1]
