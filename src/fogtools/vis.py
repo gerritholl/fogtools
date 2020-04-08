@@ -34,7 +34,7 @@ def blend_fog(sc, other="overview"):
 
 
 def get_fog_blend_for_sat(sensorreader, fl_sat, fl_nwcsaf, area,
-        blend_background):
+                          blend_background):
     """Get daytime fog blend for sensor
 
     Get a daytime fog blend.
