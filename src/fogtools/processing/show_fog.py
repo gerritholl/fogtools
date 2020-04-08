@@ -3,6 +3,7 @@
 Given NWCSAF and SEVIRI files, write file with fog image
 """
 
+import xarray
 import pathlib
 import argparse
 from .. import vis
@@ -80,8 +81,9 @@ def main():
         im.save(str(p.out))
 
     if p.store_dependencies:
-        sc.save_datasets(filename=p.out / "{name:s}.tif",
-                         datasets={d.name for d in sc.keys()})
+        sc.save_datasets(filename=str(p.out / "{name:s}.tif"),
+                         datasets={d.name for d in sc.keys() if
+                                   isinstance(sc[d], xarray.DataArray)})
 
     if p.store_intermediates:
         fogpy.composites.save_extras(sc, p.out / "intermediates.nc")

@@ -1,23 +1,7 @@
 """Test visualisation routines
 """
 
-import numpy
-import xarray
-import pytest
 from unittest.mock import patch, sentinel
-
-
-@pytest.fixture
-def xrda():
-    overview = xarray.DataArray(
-            numpy.linspace(0, 100, 3*100*100).reshape(3, 100, 100),
-            dims=("bands", "y", "x"),
-            coords={"bands": ["R", "G", "B"]})
-    fls_day = xarray.DataArray(
-            numpy.linspace(0, 100, 4*100*100).reshape(4, 100, 100),
-            dims=("bands", "y", "x"),
-            coords={"bands": ["R", "G", "B", "A"]})
-    return (overview, fls_day)
 
 
 def test_fog_blend(xrda):
