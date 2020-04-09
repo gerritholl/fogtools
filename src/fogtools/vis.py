@@ -33,8 +33,32 @@ def blend_fog(sc, other="overview"):
     return blend
 
 
-def get_fog_blend_for_sat(sensorreader, fl_sat, fl_nwcsaf, area, other,
-                          return_extra):
+def get_fog_blend_for_sat(sensorreader, fl_sat, fl_nwcsaf, area,
+                          blend_background):
+    """Get daytime fog blend for sensor
+
+    Get a daytime fog blend.
+
+    Args:
+        sensorreader (str): For which sensor/reader to derive the fog product.
+            Must be a sensor/reader supported by fogpy.  Currently those are
+            "seviri_l1b_hrit" or "abi_l1b".
+        fl_sat (List[str]): List of filenames corresponding to satellite data.
+        fl_nwcsaf (List[str]): List of filenames corresponding to NWCSAF-GEO
+            data.
+        area (str): Area for which to calculate fog.  Must be an AreaDefinition
+            defined in satpy (or PPP_CONFIG_DIR), fcitools, or fogtools.
+        blend_background (str): Satpy composite to be used as the background
+            onto which the fog mask will be blended using :func:`blend_fog`.
+
+    Returns:
+        XRImage: RGB image with the fog mask blended onto the background
+            composite
+
+        Scene: Scene object reprojected onto area, containing the composite and
+            all its dependencies.
+
+    """
     sc = satpy.Scene(
         filenames={sensorreader: fl_sat,
                    "nwcsaf-geo": fl_nwcsaf})
@@ -53,60 +77,9 @@ def get_fog_blend_for_sat(sensorreader, fl_sat, fl_nwcsaf, area, other,
         except ModuleNotFoundError:
             pass
     sc.load(["cmic_reff", "cmic_lwp", "cmic_cot", "overview"]
-            + D[sensorreader])
-    ls = sc.resample(areas[area])
+            + D[sensorreader], unload=False)
+    ls = sc.resample(areas[area], unload=False)
     ls.load(["fls_day", "fls_day_extra"], unload=False)
 
-    blend = blend_fog(ls, other)
-    if return_extra:
-        return (blend, ls)
-    else:
-        return blend
-
-
-def get_fog_blend_from_seviri_nwcsaf(
-        fl_sev,
-        fl_nwcsaf,
-        area="eurol",
-        other="overview",
-        return_extra=False):
-    """Create a blended fog image with fogpy from NWCSAF and SEVIRI
-
-    Get an image where fog is calculated for the scene and where this is then
-    blended on top of a background composite, by default the seviri "overview"
-    composite.
-
-    Args:
-
-        fl_sev (List):
-            List of corresponding SEVIRI files.  These will be read with
-            the satpy ``seviri_l1b_hrit`` reader.
-        fl_nwcsaf (List):
-            List of NWCSAF files.  These will be road with the satpy
-            ``nwcsaf-geo`` reader.
-        area (Optional[str]):
-            Area on which to respample.  Defaults to "eurol".
-        other (Optional[str]):
-            Background composite.  Defaults to "overview".
-        return_extra (Optional[bool]):
-            Also return scene with extra information from the
-            fogpy `"fls_day_extra"` "composite".  Defaults to false.
-
-    Returns:
-
-        XRImage with fog blended on top of op background.
-        If ``return_extras`` is True, also return dataset with extras.
-    """
-
-    return get_fog_blend_for_sat("seviri_l1b_hrit", fl_sev, fl_nwcsaf, area,
-                                 other, return_extra=return_extra)
-
-
-def get_fog_blend_from_abi_nwcsaf(
-        fl_abi,
-        fl_nwcsaf,
-        area="new-england-1000",
-        other="overview",
-        return_extra=False):
-    return get_fog_blend_for_sat("abi_l1b", fl_abi, fl_nwcsaf, area, other,
-                                 return_extra=return_extra)
+    blend = blend_fog(ls, blend_background)
+    return (blend, ls)

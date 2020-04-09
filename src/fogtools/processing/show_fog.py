@@ -3,6 +3,8 @@
 Given NWCSAF and SEVIRI files, write file with fog image
 """
 
+import xarray
+import pathlib
 import argparse
 from .. import vis
 import fogpy.composites
@@ -14,19 +16,25 @@ def get_parser():
             formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
     parser.add_argument(
-            "--sat", action="store", type=str,
+            "--sat", action="store", type=pathlib.Path,
             nargs="+", required=True,
             help="List of satellite files")
 
     parser.add_argument(
-            "--nwcsaf", action="store", type=str,
+            "--nwcsaf", action="store", type=pathlib.Path,
             required=True, nargs="+",
             help="List of NWCSAF files")
 
     parser.add_argument(
-            "outfile",
-            action="store", type=str,
-            help="Output file")
+            "out",
+            action="store", type=pathlib.Path,
+            help="Where to store output.  If storing a single file, this "
+                 "is interpreted as a filename.  If storing multiple files, "
+                 "it will be interpreted as a directory that will be created "
+                 "and that will contain all output files.  Storing multiple "
+                 "files happens when passing -i or -d.  In this case, each "
+                 "dataset will be stored as `dataset.tif` within the output "
+                 "directory.")
 
     parser.add_argument(
             "-a", "--area", action="store", type=str,
@@ -34,8 +42,15 @@ def get_parser():
             help="Area for which to generate image")
 
     parser.add_argument(
-            "-e", "--extra", action="store", type=str,
-            help="File to which to store extra information")
+            "-i", "--store-intermediates", action="store_true",
+            help="Also store intermediates, i.e. any values that Fogpy "
+                 "calculates from the inputs before calculating the fog "
+                 "mask.")
+
+    parser.add_argument(
+            "-d", "--store-dependencies", action="store_true",
+            help="Also write all dependencies, that means all products used "
+                 "directly by fogpy to generate the fog products")
 
     parser.add_argument(
             "-m", "--mode", type=str, action="store",
@@ -53,16 +68,22 @@ def main():
     from satpy.utils import debug_on
     debug_on()
     p = parse_cmdline()
-    rv = vis.get_fog_blend_for_sat(
+    (im, sc) = vis.get_fog_blend_for_sat(
             p.mode,
-            p.sat,
-            p.nwcsaf,
+            [str(f) for f in p.sat],
+            [str(f) for f in p.nwcsaf],
             p.area,
-            "overview",
-            return_extra=p.extra is not None)
-    if p.extra is not None:
-        (im, ex) = rv
-        fogpy.composites.save_extras(ex, p.extra)
+            "overview")
+    if p.store_intermediates or p.store_dependencies:
+        p.out.mkdir(exist_ok=True, parents=True)
+        im.save(str(p.out / "fog_blend.tif"))
     else:
-        im = rv
-    im.save(p.outfile)
+        im.save(str(p.out))
+
+    if p.store_dependencies:
+        sc.save_datasets(filename=str(p.out / "{name:s}.tif"),
+                         datasets={d.name for d in sc.keys() if
+                                   isinstance(sc[d], xarray.DataArray)})
+
+    if p.store_intermediates:
+        fogpy.composites.save_extras(sc, p.out / "intermediates.nc")
