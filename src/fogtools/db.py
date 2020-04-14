@@ -7,6 +7,11 @@ of fogpy and satpy, to make the code more maintainable by improved modularity
 and adding unitests, and to support ground data over the USA.
 """
 
+import abc
+
+class FogDBError:
+    pass
+
 
 class FogDB:
     """Database of fog cases
@@ -40,16 +45,43 @@ class FogDB:
 
     """
 
-    # There are different methods called get_x here, but there are two different
-    # aims for getting data.  One is adding to the fog database, the other
-    # is gathering the inputs needed to calculate the fog.  Should not confuse
-    # the two, however they overlap.  Maybe one should be called prepare?  Or
-    # maybe the whole functionality should be split in different classes?
+    # There are different methods called get_x here, but there are two
+    # different aims for getting data.  One is adding to the fog database,
+    # the other # is gathering the inputs needed to calculate the fog.
+    # Should not confuse the two, however they overlap.  Maybe one should
+    # be called prepare?  Or maybe the whole functionality should be split
+    # in different classes?
+    #
+    # What is to be done:
     #
     # - prepare input data for running fogpy
+    #   - if already there (where?) take from cache
     # - run fogpy
+    #   - if already run for date, take from cache
+    #       - use trollsift + yaml for config?
     # - gather the results + other data
     # - process this and build the database
+    # - needs a framework for getting location of cached data etc
+    #   - for each of sat, nwp, dem, nwcsaf, synop, ...:
+    #       - get path where cached
+    #       - check if already stored there
+    #       - if not, generate:
+    #           - for each input, perform step above
+    #           - possibly add symlink
+    #           - store in cache
+    #       - select reference pixels
+    #       - add to database
+
+    sat = nwp = cmic = ground = dem = fog = None
+
+    def __init__(self):
+        self.sat = _ABI()
+        self.nwp = _ICON()
+        self.cmic = _NWCSAF(dependencies={self.sat, self.nwp})
+        self.ground = _SYNOP()
+        self.dem = _DEM()
+        self.fog = _Fog(dependencies=(self.sat, self.cmic, self.dem))
+
 
     def __setattr__(self, k, v):
         getattr(self, k)  # will trigger AttributeError if not found
@@ -129,10 +161,10 @@ class FogDB:
         raise NotImplementedError()
 
     def get_swis(self, timestamp):
-        # swis is another source fo ground truth
+        # swis is another source of ground truth
         raise NotImplementedError()
 
-    def get_dem(self, timestamp):
+    def get_dem(self):
         raise NotImplementedError()
 
     def get_cosmo(self, timestamp):
@@ -141,8 +173,169 @@ class FogDB:
     def get_cloud_microphysics(self, timestamp):
         return self.get_nwcsaf(timestamp)
 
-    def get_nwcsaf(timestamp):
+    def get_nwcsaf(self, timestamp):
+        self.ensure_nwcsaf_inputs(timestamp)
+        self.run_nwcsaf(timestamp)
         raise NotImplementedError()
+
+    def ensure_nwcsaf_inputs(self, timestamp):
+        """Ensure NWCSAF has inputs it needs
+        """
+        self.ensure_nwcsaf_nwp(timestamp)
+        self.ensure_nwcsaf_sat(timestamp)
+
+    def ensure_nwcsaf_nwp(self, timestamp):
+        """Ensure NWCSAF NWP input data present and findable
+
+        Relative to the NWCSAF directory, those have names such as
+        import/NWP_data/S_NWC_NWP_2017-03-14T18:00:00Z_000.grib
+
+        """
+
+        if not self.has_nwcsaf_nwp(timestamp):
+            self.get_nwcsaf_nwp(timestamp)
+        self.link_nwcsaf_nwp(timestamp)
+
+    def ensure_nwcsaf_sat(self, timestamp):
+        """Ensure sat input data present for NWCSAF
+
+        Relatuve to the NWCSAF directory, those have names such as
+        import/Sat_data/OR_ABI-L1b-RadF-M3C16_G16_s20170731751103_e20170731801481_c20170731801539.nc
+        """
+
+        if not self.has_nwcsaf_sat(timestamp):
+            self.get_nwcsaf_sat(timestamp)
+        self.link_nwcsaf_sat(timestamp)
 
     def get_fogpyproducts(timestamp):
         raise NotImplementedError()
+
+
+class _DB(abc.ABC):
+    """Get/cache/store/... DB content for quantity
+    """
+
+    # - needs a framework for getting location of cached data etc
+    #   - for each of sat, nwp, dem, nwcsaf, synop, ...:
+    #       - get path where cached
+    #       - check if already stored there
+    #       - if not, generate:
+    #           - for each input, perform step above
+    #           - possibly add symlink
+    #           - store in cache
+    #       - select reference pixels
+    #
+    # Do I really need a different subclass for each type of content?  Or will
+    # instances suffice?  Reading the content is going to be different for
+    # each.  Which parts can be fully in common?  Who creates the instances?
+
+    dependencies = None
+
+    def __init__(self, dependencies=None):
+        self.dependencies = dependencies if dependencies else []
+
+    @abc.abstractmethod
+    def get_path(self, timestamp):
+        # sometimes it's one file, sometimes multiple files (such as input
+        # NWCSAF with multiple channels or times), how to handle this?
+        # Always return a collection?
+        # It should probably always return a collection, which probably means I
+        # need the flexibility of reimplementing it in subclasses and I can't
+        # have it all defined from yaml files?
+        raise NotImplementedError()
+
+    def exists(self, timestamp):
+        for p in self.get_path(timestamp):
+            if not p.exists():
+                return False
+        return True
+
+    def ensure_deps(self, timestamp):
+        for dep in self.dependencies:
+            dep.ensure()
+        self.link(dep, timestamp)
+
+    def ensure(self, timestamp):
+        if not self.exists():
+            self.generate()
+
+    @abc.abstractmethod
+    def generate(self, timestamp):
+        raise NotImplementedError()
+
+    @abc.abstractmethod
+    def store(self, timestamp):
+        """Store in cache.
+        """
+        raise NotImplementedError()
+
+    def link(self, dep, timestamp):
+        """If needed, add symlink for dependency
+        """
+        pass
+
+    @abc.abstractmethod
+    def extract(self, timestamp, lats, lons):
+        # there should be a way to share this, at least between all contents
+        # that are part of a Scene object: ABI, NWCSAF, DEM.  Should in
+        # principle also work for ICON, GFS, IFS if in GRIB2, using Satpy grib2
+        # reader.
+        raise NotImplementedError()
+
+
+class _Sat(_DB):
+    pass
+
+
+class _ABI(_Sat):
+    def get_path(self, timestamp):
+        raise NotImplementedError("Cannot calculate path for ABI")
+
+    def exists(self, timestamp):
+        for chan in abi.nwcsaf_abi_channels|abi.fogpy_abi_channels:
+            dl_dir = abi.get_dl_dir(
+                    sattools.io.get_cache_dir(subdir="fogtools"),
+                    timestamp,
+                    chan)
+            cnt = list(dl_dir.glob(f"*C{chan:>02d}*"))
+            if len(cnt) < 1:
+                return False
+            elif len(cnt) > 1:
+                raise FogDBError(f"Channel {chan:d} found multiple times in "
+                        f"{dl_dir!s}?! " + ", ".join(str(c) for c in cnt))
+        return True
+
+    _generated = {}
+    def generate(self, timestamp):
+        abi.download_abi_day(timestamp)
+        self._generated[timestamp] = True
+
+    def store(self, timestamp):
+        # already stored by .generate
+        if not self._generated.get(timestamp, False):
+            raise FogDBError("Called .store(...) before .generate(...)")
+
+
+class _NWP(_DB):
+    pass
+
+
+class _ICON(_NWP):
+    pass
+
+
+class _NWCSAF(_DB):
+    def link(self, dep, timestamp):
+        raise NotImplementedError()
+
+
+class _SYNOP(_DB):
+    pass
+
+
+class _DEM(_DB):
+    pass
+
+
+class _Fog(_DB):
+    pass

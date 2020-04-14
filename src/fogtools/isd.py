@@ -254,7 +254,7 @@ def create_db(f=None, start=pandas.Timestamp(2017, 1, 1),
     stations = select_stations(get_stations())
     ids = get_station_ids(stations)
     cachedir = stio.get_cache_dir(subdir="fogtools")
-    f = pathlib.Path(f) if f is not None else (cachedir / "store.parquet")
+    f = pathlib.Path(f) if f is not None else get_db_location()
     if not isinstance(start, pandas.Timestamp):
         start = pandas.Timestamp(start)
     if not isinstance(end, pandas.Timestamp):
@@ -283,12 +283,18 @@ def create_db(f=None, start=pandas.Timestamp(2017, 1, 1),
     df_total.to_parquet(f)
 
 
+def get_db_location():
+    """Get location for parquet DB
+    """
+    cachedir = stio.get_cache_dir(subdir="fogtools")
+    return cachedir / "store.parquet"
+
+
 def read_db(f=None):
     """Read parquet DB
     """
 
-    cachedir = stio.get_cache_dir(subdir="fogtools")
-    f = f or (cachedir / "store.parquet")
+    f = f or get_db_location()
     return pandas.read_parquet(f)
 
 
