@@ -20,9 +20,9 @@ fogpy_abi_channels = {2, 3, 5, 7, 11, 14, 15}
 def get_s3_uri(dt, tp="C"):
     """Get S3 URI for GOES ABI for day
 
-    Construct the S3 URI that should contain GOES 16 ABI L1B data for the day and
-    L1 type.  This construction is purely offline, i.e. no attempt is made to
-    verify this path actually exists.
+    Construct the S3 URI that should contain GOES 16 ABI L1B data for the day
+    and L1 type.  This construction is purely offline, i.e. no attempt is made
+    to verify this path actually exists.
 
     Args:
         dt (pandas.Timestamp): Time for which to construct S3 URI.  Will be
@@ -111,10 +111,15 @@ def download_abi_day(dt, chans=fogpy_abi_channels | nwcsaf_abi_channels,
     Args:
         dt (Timestamp)
             Date for which to download
+
+    Returns:
+        List[pathlib.Path]
+            Files downloaded or already present
     """
 
     fs = s3fs.S3FileSystem(anon=True)
     cd = stio.get_cache_dir(subdir="fogtools")
+    L = []
     # loop through hours, because data files sorted per hour in AWS
     for (t, chan, tp) in itertools.product(
             pandas.date_range(dt.floor("D"), periods=24, freq="1H"),
@@ -128,3 +133,5 @@ def download_abi_day(dt, chans=fogpy_abi_channels | nwcsaf_abi_channels,
                 logger.info(f"Downloading {f!s}")
                 df.parent.mkdir(exist_ok=True, parents=True)
                 fs.get(f"s3://{f:s}", df)
+            L.append(df)
+    return L

@@ -7,7 +7,14 @@ of fogpy and satpy, to make the code more maintainable by improved modularity
 and adding unitests, and to support ground data over the USA.
 """
 
+import pandas
+import satpy
 import abc
+
+import sattools.io
+
+from . import abi
+
 
 class FogDBError:
     pass
@@ -71,8 +78,13 @@ class FogDB:
     #           - store in cache
     #       - select reference pixels
     #       - add to database
+    #
+    # Should each sub-db have its own Scene object or should they all share
+    # one, coordinate by the overall FogDB?  Probably easier to merge the Scene
+    # objects later, as the Scene object wants to know upon instantiation
+    # already the readers and filenames involved.
 
-    sat = nwp = cmic = ground = dem = fog = None
+    sat = nwp = cmic = ground = dem = fog = data = None
 
     def __init__(self):
         self.sat = _ABI()
@@ -82,133 +94,23 @@ class FogDB:
         self.dem = _DEM()
         self.fog = _Fog(dependencies=(self.sat, self.cmic, self.dem))
 
-
     def __setattr__(self, k, v):
         getattr(self, k)  # will trigger AttributeError if not found
-        super().__setattr__(self, k, v)
+        super().__setattr__(k, v)
 
     def extend(self, timestamp):
         """Add data from <timestamp> to database
         """
 
-        # there's a dependency tree to worry about here, can I use Satpy
-        # functionality for that?  Or is that more trouble than it's worth?
-        # Probably more trouble than it's worth.
-        sat = self.get_sat(timestamp)
-        ground = self.get_ground_truth(timestamp)
-        dem = self.get_dem(timestamp)
-        analysis_input = self.get_input_analysis(timestamp)
-        analysis_comp = self.get_comparison_analysis(timestamp)
-        cmip = self.get_cloud_microphysics(timestamp)
-        fog = self.get_fogpy_products(timestamp)
-        df = self.build(self, sat, ground, dem, analysis, cmip, fog)
-        # do what with df?
-
-    def get_ground_truth(self, timestamp):
-        """Get ground weather reports for <timestamp>
-
-        These are used to compare against.
-        """
-
-        synop = self.get_synop(timestamp)
-        metar = self.get_metar(timestamp)
-        swis = self.get_swis(timestamp)
-        df = self.build(synop, metar, swis)
-        return df
-
-    def get_comparison_input(self, timestamp):
-        """Get model analysis and forecast for input to NWCSAF
-
-        Get model analysis and forecast that we need as input to NWCSAF.
-        This will come from ICON.
-        """
-
-        # this should use the sky module
-        #
-        # - check if data are present (where?)
-        # - if not, get from SKY using sky module
-
-        raise NotImplementedError()
-
-    def get_comparison_analysis(self, timestamp):
-        """Get model analysis and forecast for comparison
-
-        Get model analysis and forecast for comparing the fog result with.
-        This may be from a regional model; Thomas Leppelt was using COSMO but
-        that won't work in North-America.  Could also compare with IFS from
-        ECMWF.  Need to think of a flexible way of implementing this, perhaps
-        by passing a bunch of classes that each implement the same interface.
-        """
-
-        raise NotImplementedError()
-
-    def get_sat(self, timestamp):
-        # this should use the abi module
-        #
-        # - check if data are present (where?)
-        # - if not, download (for ABI, from S3)
-        raise NotImplementedError()
-
-    def get_synop(self, timestamp):
-        # this should use the isd module
-        #
-        # - check if data are present (where?)
-        # - if not, get from ISD
-        raise NotImplementedError()
-
-    def get_metar(self, timestamp):
-        # metar is another source of ground truth
-        raise NotImplementedError()
-
-    def get_swis(self, timestamp):
-        # swis is another source of ground truth
-        raise NotImplementedError()
-
-    def get_dem(self):
-        raise NotImplementedError()
-
-    def get_cosmo(self, timestamp):
-        raise NotImplementedError()
-
-    def get_cloud_microphysics(self, timestamp):
-        return self.get_nwcsaf(timestamp)
-
-    def get_nwcsaf(self, timestamp):
-        self.ensure_nwcsaf_inputs(timestamp)
-        self.run_nwcsaf(timestamp)
-        raise NotImplementedError()
-
-    def ensure_nwcsaf_inputs(self, timestamp):
-        """Ensure NWCSAF has inputs it needs
-        """
-        self.ensure_nwcsaf_nwp(timestamp)
-        self.ensure_nwcsaf_sat(timestamp)
-
-    def ensure_nwcsaf_nwp(self, timestamp):
-        """Ensure NWCSAF NWP input data present and findable
-
-        Relative to the NWCSAF directory, those have names such as
-        import/NWP_data/S_NWC_NWP_2017-03-14T18:00:00Z_000.grib
-
-        """
-
-        if not self.has_nwcsaf_nwp(timestamp):
-            self.get_nwcsaf_nwp(timestamp)
-        self.link_nwcsaf_nwp(timestamp)
-
-    def ensure_nwcsaf_sat(self, timestamp):
-        """Ensure sat input data present for NWCSAF
-
-        Relatuve to the NWCSAF directory, those have names such as
-        import/Sat_data/OR_ABI-L1b-RadF-M3C16_G16_s20170731751103_e20170731801481_c20170731801539.nc
-        """
-
-        if not self.has_nwcsaf_sat(timestamp):
-            self.get_nwcsaf_sat(timestamp)
-        self.link_nwcsaf_sat(timestamp)
-
-    def get_fogpyproducts(timestamp):
-        raise NotImplementedError()
+        dfs = []
+        for src in (self.sat, self.nwp, self.cmic, self.ground, self.dem,
+                    self.fog):
+            dfs.append(src.extract())
+        df = pandas.concat(dfs, axis=1)
+        if self.data is None:
+            self.data = df
+        else:
+            self.data = pandas.concat(self.data, df, axis=0)
 
 
 class _DB(abc.ABC):
@@ -230,9 +132,11 @@ class _DB(abc.ABC):
     # each.  Which parts can be fully in common?  Who creates the instances?
 
     dependencies = None
+    _data = None
 
     def __init__(self, dependencies=None):
         self.dependencies = dependencies if dependencies else []
+        self._data = {}
 
     @abc.abstractmethod
     def get_path(self, timestamp):
@@ -257,10 +161,10 @@ class _DB(abc.ABC):
 
     def ensure(self, timestamp):
         if not self.exists():
-            self.generate()
+            self.store()
 
     @abc.abstractmethod
-    def generate(self, timestamp):
+    def load(self, timestamp):
         raise NotImplementedError()
 
     @abc.abstractmethod
@@ -274,13 +178,29 @@ class _DB(abc.ABC):
         """
         pass
 
-    @abc.abstractmethod
     def extract(self, timestamp, lats, lons):
-        # there should be a way to share this, at least between all contents
-        # that are part of a Scene object: ABI, NWCSAF, DEM.  Should in
-        # principle also work for ICON, GFS, IFS if in GRIB2, using Satpy grib2
-        # reader.
-        raise NotImplementedError()
+        """Extract data points
+
+        Given a time and a series of lats and lons, extract data points from
+        images/datasets.  Typically those lat/lons would correspond to
+        ground stations.  This method assumes that self.load has been
+        implemented to return a scene object.  If a subclass implements
+        self.load differently then it must also override extract.
+
+        Args:
+            timestamp (pandas.Timestamp): time for which to extract
+            lats (array_like): latitudes for which to extract
+            lons (array_like): longitudes for which to extract
+
+        Returns:
+            pandas.DataFrame with the desired data
+        """
+        sc = self.load(timestamp)
+        vals = {}
+        for da in sc:
+            (x, y) = da.attrs["area"].get_xy_from_lonlat(lons, lats)
+            vals[da.attrs["name"]] = da.data[x, y]
+        return pandas.DataFrame(vals)
 
 
 class _Sat(_DB):
@@ -292,7 +212,7 @@ class _ABI(_Sat):
         raise NotImplementedError("Cannot calculate path for ABI")
 
     def exists(self, timestamp):
-        for chan in abi.nwcsaf_abi_channels|abi.fogpy_abi_channels:
+        for chan in abi.nwcsaf_abi_channels | abi.fogpy_abi_channels:
             dl_dir = abi.get_dl_dir(
                     sattools.io.get_cache_dir(subdir="fogtools"),
                     timestamp,
@@ -302,18 +222,31 @@ class _ABI(_Sat):
                 return False
             elif len(cnt) > 1:
                 raise FogDBError(f"Channel {chan:d} found multiple times in "
-                        f"{dl_dir!s}?! " + ", ".join(str(c) for c in cnt))
+                                 f"{dl_dir!s}?! " + ", ".join(
+                                     str(c) for c in cnt))
         return True
 
-    _generated = {}
-    def generate(self, timestamp):
-        abi.download_abi_day(timestamp)
-        self._generated[timestamp] = True
-
     def store(self, timestamp):
-        # already stored by .generate
-        if not self._generated.get(timestamp, False):
-            raise FogDBError("Called .store(...) before .generate(...)")
+        self._generated[timestamp] = abi.download_abi_day(timestamp)
+
+    def load(self, timestamp):
+        """Get scene containing relevant ABI channels
+        """
+        if not self.exists(timestamp):
+            self.store(timestamp)
+        files = self._generated[timestamp]
+        # I want to select those files where the time matches.  More files may
+        # have been downloaded, in particular for the benefit of NWCSAF.  How
+        # to do this matching?  Could use pathlib.Path.match or perhaps
+        # satpy.readers.group_files.
+        selection = [p for p in files if p.match(
+            f"*_s{timestamp:%Y%j%H%M%S%f}_*.nc")]
+        sc = satpy.Scene(
+                filenames=selection,
+                reader="abi_l1b")
+        sc.load([f"C{ch:>02d}" for ch in
+                 abi.nwcsaf_abi_channels | abi.fogpy_abi_channels])
+        return sc
 
 
 class _NWP(_DB):
@@ -321,21 +254,118 @@ class _NWP(_DB):
 
 
 class _ICON(_NWP):
+
+    def load(self, timestamp):
+        """Get model analysis and forecast for input to NWCSAF
+
+        Get model analysis and forecast that we need as input to NWCSAF.
+        This will come from ICON.
+        """
+
+        # this should use the sky module
+        #
+        # - check if data are present (where?)
+        # - if not, get from SKY using sky module
+
+        raise NotImplementedError()
     pass
 
 
-class _NWCSAF(_DB):
+class _CMIC(_DB):
+    pass
+
+
+class _NWCSAF(_CMIC):
+
+    def load(self, timestamp):
+        self.ensure_nwcsaf_inputs(timestamp)
+        self.run_nwcsaf(timestamp)
+        raise NotImplementedError()
+
+    def ensure_nwcsaf_inputs(self, timestamp):
+        """Ensure NWCSAF has inputs it needs
+        """
+        raise RuntimeError("Delete, this is in superclass")
+        self.ensure_nwcsaf_nwp(timestamp)
+        self.ensure_nwcsaf_sat(timestamp)
+
+    def ensure_nwcsaf_nwp(self, timestamp):
+        """Ensure NWCSAF NWP input data present and findable
+
+        Relative to the NWCSAF directory, those have names such as
+        import/NWP_data/S_NWC_NWP_2017-03-14T18:00:00Z_000.grib
+
+        """
+        # FIXME DELETE
+        if not self.has_nwcsaf_nwp(timestamp):
+            self.get_nwcsaf_nwp(timestamp)
+        self.link_nwcsaf_nwp(timestamp)
+
+    def ensure_nwcsaf_sat(self, timestamp):
+        """Ensure sat input data present for NWCSAF
+
+        Relatuve to the NWCSAF directory, those have names such as
+        import/Sat_data/OR_ABI-L1b-RadF-M3C16_G16_s20170731751103_e20170731801481_c20170731801539.nc
+        """
+        # FIXME DELETE
+
+        if not self.has_nwcsaf_sat(timestamp):
+            self.get_nwcsaf_sat(timestamp)
+        self.link_nwcsaf_sat(timestamp)
+
     def link(self, dep, timestamp):
         raise NotImplementedError()
 
 
-class _SYNOP(_DB):
+class _Ground(_DB):
     pass
+
+
+class _SYNOP(_Ground):
+    def load(self, timestamp):
+        # this should use the isd module
+        #
+        # - check if data are present (where?)
+        # - if not, get from ISD
+        raise NotImplementedError()
 
 
 class _DEM(_DB):
-    pass
+    def load(self):
+        raise NotImplementedError()
 
 
 class _Fog(_DB):
-    pass
+    def load(timestamp):
+        raise NotImplementedError()
+
+
+class _IFS(_NWP):
+    def load(self, timestamp):
+        """Get model analysis and forecast for comparison
+
+        Get model analysis and forecast for comparing the fog result with.
+        This may be from a regional model; Thomas Leppelt was using COSMO but
+        that won't work in North-America.  Could also compare with IFS from
+        ECMWF.  Need to think of a flexible way of implementing this, perhaps
+        by passing a bunch of classes that each implement the same interface.
+        """
+
+        raise NotImplementedError()
+
+
+class _COSMO(_NWP):
+    def load(self, timestamp):
+        raise NotImplementedError()
+
+
+class _METAR(_Ground):
+    def load(self, timestamp):
+        # metar is another source of ground truth
+        raise NotImplementedError()
+
+
+class _SWIS(_Ground):
+    def load(self, timestamp):
+        # swis is another source of ground truth
+        raise NotImplementedError()

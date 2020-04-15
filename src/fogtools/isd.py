@@ -253,7 +253,6 @@ def create_db(f=None, start=pandas.Timestamp(2017, 1, 1),
     # TODO, this should merge the vis extraction
     stations = select_stations(get_stations())
     ids = get_station_ids(stations)
-    cachedir = stio.get_cache_dir(subdir="fogtools")
     f = pathlib.Path(f) if f is not None else get_db_location()
     if not isinstance(start, pandas.Timestamp):
         start = pandas.Timestamp(start)
