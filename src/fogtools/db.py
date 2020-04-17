@@ -7,13 +7,19 @@ of fogpy and satpy, to make the code more maintainable by improved modularity
 and adding unitests, and to support ground data over the USA.
 """
 
+import logging
+import subprocess
+import tempfile
+
 import pandas
 import satpy
 import abc
 
 import sattools.io
 
-from . import abi
+from . import abi, sky
+
+logger = logging.getLogger(__name__)
 
 
 class FogDBError:
@@ -83,6 +89,25 @@ class FogDB:
     # one, coordinate by the overall FogDB?  Probably easier to merge the Scene
     # objects later, as the Scene object wants to know upon instantiation
     # already the readers and filenames involved.
+    #
+    # A lot of this could be done in parallel, perhaps they should all return
+    # awaitables?  Much of the data gathering is I/O bound *or* coming from a
+    # subprocess.  Only the fogpy fog calculation is CPU bound.  Consider using
+    # asyncio and coroutines:
+    #
+    # - ICON stuff is slow (wait for sky tape)
+    # - ABI stuff is slow (download from AWS)
+    # - NWCSAF is slow (external process) but depends on the former two
+    # - loading synop and DEM is probably fast enough
+    # - calculating fog is CPU bound and depends on other stuff being there
+    #
+    # so the most sense to do synchranously is downloading ABI and ICON.  The
+    # NWCSAF software already monitors for files to appear and runs in the
+    # background "naturally", so the procedure should be to asynchronously
+    # download ICON and ABI data to the right place, then wait for NWCSAF
+    # files to appear.  Where does asyncio come in exactly?
+
+    # TODO: use concurrent.futures
 
     sat = nwp = cmic = ground = dem = fog = data = None
 
@@ -112,6 +137,13 @@ class FogDB:
         else:
             self.data = pandas.concat(self.data, df, axis=0)
 
+    def store(self, f):
+        """Store database to file
+        """
+        if self.data is None:
+            raise ValueError("No entries in database!")
+        self.data.to_parquet(f)
+
 
 class _DB(abc.ABC):
     """Get/cache/store/... DB content for quantity
@@ -132,10 +164,17 @@ class _DB(abc.ABC):
     # each.  Which parts can be fully in common?  Who creates the instances?
 
     dependencies = None
+    base = None
     _data = None
+
+    @property
+    @abc.abstractmethod
+    def reader(self):
+        ...
 
     def __init__(self, dependencies=None):
         self.dependencies = dependencies if dependencies else []
+        self.base = sattools.io.get_cache_dir(subdir="fogtools") / "nwcsaf"
         self._data = {}
 
     @abc.abstractmethod
@@ -156,16 +195,19 @@ class _DB(abc.ABC):
 
     def ensure_deps(self, timestamp):
         for dep in self.dependencies:
-            dep.ensure()
+            dep.ensure(timestamp)
         self.link(dep, timestamp)
 
     def ensure(self, timestamp):
         if not self.exists():
             self.store()
 
-    @abc.abstractmethod
     def load(self, timestamp):
-        raise NotImplementedError()
+        sc = satpy.Scene(
+                filenames=self.get_path(timestamp),
+                reader=self.reader)
+        sc.load(sc.available_dataset_names())
+        return sc
 
     @abc.abstractmethod
     def store(self, timestamp):
@@ -204,10 +246,14 @@ class _DB(abc.ABC):
 
 
 class _Sat(_DB):
+    """Placeholder class in case further satellites are added.
+    """
     pass
 
 
 class _ABI(_Sat):
+    reader = "abi_l1b"
+
     def get_path(self, timestamp):
         raise NotImplementedError("Cannot calculate path for ABI")
 
@@ -227,13 +273,14 @@ class _ABI(_Sat):
         return True
 
     def store(self, timestamp):
+        """Store ABI for timestamp
+        """
         self._generated[timestamp] = abi.download_abi_day(timestamp)
 
     def load(self, timestamp):
         """Get scene containing relevant ABI channels
         """
-        if not self.exists(timestamp):
-            self.store(timestamp)
+        self.ensure(timestamp)
         files = self._generated[timestamp]
         # I want to select those files where the time matches.  More files may
         # have been downloaded, in particular for the benefit of NWCSAF.  How
@@ -254,21 +301,23 @@ class _NWP(_DB):
 
 
 class _ICON(_NWP):
+    reader = "grib"
 
-    def load(self, timestamp):
+    def get_path(self, timestamp):
+        rb = sky.RequestBuilder(self.base)
+        period = timestamp  # TODO: timestamp to period
+        rb.get_request_ba(sky.period2daterange(period))
+        return rb.expected_output_files
+
+    def store(self, timestamp):
         """Get model analysis and forecast for input to NWCSAF
 
         Get model analysis and forecast that we need as input to NWCSAF.
         This will come from ICON.
         """
 
-        # this should use the sky module
-        #
-        # - check if data are present (where?)
-        # - if not, get from SKY using sky module
-
-        raise NotImplementedError()
-    pass
+        period = timestamp  # TODO: timestamp to period
+        self._generated[timestamp] = sky.get_and_send(self.base, period)
 
 
 class _CMIC(_DB):
@@ -276,42 +325,74 @@ class _CMIC(_DB):
 
 
 class _NWCSAF(_CMIC):
+    reader = "nwcsaf-geo"
 
-    def load(self, timestamp):
-        self.ensure_nwcsaf_inputs(timestamp)
-        self.run_nwcsaf(timestamp)
-        raise NotImplementedError()
+    def get_path(self, timestamp):
+        return [(self.base /
+                 f"{timestamp:%Y}" / f"{timestamp:%m}" / f"{timestamp:%d}" /
+                 f"S_NWC_CMIC_GOES16_NEW-ENGLAND-NR_"
+                f"{timestamp:%Y%m%dT%H%M%S}Z.nc")]
 
-    def ensure_nwcsaf_inputs(self, timestamp):
-        """Ensure NWCSAF has inputs it needs
+    def store(self, timestamp):
+        """Store NWCSAF output
+
+        The NWCSAF output is generated using the SAFNWC software.  Whenever the
+        software is running and the dependencies are present in the right
+        place, it should be generated automatically.  This function ensures
+        that the dependencies are in the right place and starts running the
+        SAFNWC software if needed, but does not wait for the files to be
+        present.
         """
-        raise RuntimeError("Delete, this is in superclass")
-        self.ensure_nwcsaf_nwp(timestamp)
-        self.ensure_nwcsaf_sat(timestamp)
+        # This is generated with the SAFNWC software, see
+        # <https://ninjoservices.dwd.de/wiki/display/SATMET/NWC+SAF+Software
+        #  #NWCSAFSoftware-NWCSAFv2018.1f%C3%BCrOFF-LINEmodemitGOES-16ABIDaten>
+        # and http://www.nwcsaf.org/
+        #
+        # normally, if the Task Monitor (TM) is running, it be monitoring for
+        # changes and # start processing automatically when satellite files
+        # are added.
 
-    def ensure_nwcsaf_nwp(self, timestamp):
-        """Ensure NWCSAF NWP input data present and findable
+        self.ensure_deps(timestamp)
+        if not self.is_running():
+            self.start_running()
+        # await existance of file?  Or up to caller?
 
-        Relative to the NWCSAF directory, those have names such as
-        import/NWP_data/S_NWC_NWP_2017-03-14T18:00:00Z_000.grib
+    @staticmethod
+    def is_running():
+        """Check whether the NWCSAF software is running
 
+        Using the task manager, check whether the NWCSAF software is running.
+        Return True if it is or False otherwise.  Raises CalledProcessError if
+        the task manager doesn't exist or exits with a different errorcode than
+        1 (such as with a signal).  Raises a FogDBError if the task manager
+        exited successfully but with an unexpected output.
         """
-        # FIXME DELETE
-        if not self.has_nwcsaf_nwp(timestamp):
-            self.get_nwcsaf_nwp(timestamp)
-        self.link_nwcsaf_nwp(timestamp)
+        with tempfile.NamedTemporaryFile(mode="rb") as ntf:
+            try:
+                subprocess.run(["tm", f"-o{ntf.name:s}", "status"], check=True)
+            except subprocess.CalledProcessError as cpe:
+                if cpe.returncode == 1:
+                    return False
+                else:
+                    raise
+            out = ntf.read()
+            if b"Active Mode" not in out:
+                raise FogDBError("Unexpected output from task manager:\n" +
+                                 out.decode("ascii"))
+        return True
 
-    def ensure_nwcsaf_sat(self, timestamp):
-        """Ensure sat input data present for NWCSAF
+    def start_running(self):
+        """Run NWCSAF software
 
-        Relatuve to the NWCSAF directory, those have names such as
-        import/Sat_data/OR_ABI-L1b-RadF-M3C16_G16_s20170731751103_e20170731801481_c20170731801539.nc
+        Start running the NWCSAF software.  As this takes a moment to get
+        started, users might want to run this module using
+        `ThreadPoolExecutor.submit`.
+
+        Returns:
+            CalledProcess
         """
-        # FIXME DELETE
-
-        if not self.has_nwcsaf_sat(timestamp):
-            self.get_nwcsaf_sat(timestamp)
-        self.link_nwcsaf_sat(timestamp)
+        logging.debug("Starting NWCSAF software")
+        return subprocess.run(["SAFNWCTM"], check=True)
 
     def link(self, dep, timestamp):
         raise NotImplementedError()

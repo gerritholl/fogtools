@@ -389,6 +389,22 @@ def period2daterange(p):
 
 
 def get_and_send(base, period):
+    """Build a request and send it to sky
+
+    Get ICON files for period and request them from the sky "roma" database.
+    The files will be written to the subdirectory import/NWP_data within
+    ``basedir``, where the NWCSAF software can find them.
+
+    Args:
+        base (pathlib.Path or str)
+            Directory where NWCSAF software are
+        p (pandas.Period)
+            Analysis date
+
+    Returns:
+        List[pathlib.Path] with generated files
+    """
+
     rb = RequestBuilder(base)
     ba = rb.get_request_ba(period2daterange(period))
     logger.info("Sending request to sky, expecting output files: " +
@@ -400,3 +416,4 @@ def get_and_send(base, period):
         if not (peof.exists() and peof.stat().st_size > 0):
             raise SkyFailure(f"File absent or empty: {eof!s}, sky "
                              "apparently failed to find data.")
+    return rb.expected_output_files
