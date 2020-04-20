@@ -380,6 +380,19 @@ def verify_period(p):
         raise ValueError("Start time must be whole hour")
 
 
+def timestamp2period(ts):
+    """Get 6-hour period around timestamp
+
+    Taking a timestamp, take the 6-hour period starting at the most recent
+    analysis, containing the requested timestamp.  That will be the
+    period [ts.hour//6, ts.hour//6+6].
+
+    Args:
+        ts: pandas.Timestamp
+    """
+    return pandas.Period(ts.floor("6H"), "6H")
+
+
 def period2daterange(p):
     # surely there must be a pandas built-in way to do this?
     return pandas.date_range(

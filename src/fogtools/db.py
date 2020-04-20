@@ -10,6 +10,7 @@ and adding unitests, and to support ground data over the USA.
 import logging
 import subprocess
 import tempfile
+import pathlib
 
 import pandas
 import satpy
@@ -17,7 +18,7 @@ import abc
 
 import sattools.io
 
-from . import abi, sky
+from . import abi, sky, isd, core
 
 logger = logging.getLogger(__name__)
 
@@ -107,17 +108,23 @@ class FogDB:
     # download ICON and ABI data to the right place, then wait for NWCSAF
     # files to appear.  Where does asyncio come in exactly?
 
-    # TODO: use concurrent.futures
+    # TODO:
+    #   - use concurrent.futures
+    #   - symlinks for NWCSAF dependencies
+    #   - collect results
+    #   - add results to database
+    #   - some way to tell classes where data are (such as for fog)
 
     sat = nwp = cmic = ground = dem = fog = data = None
 
     def __init__(self):
         self.sat = _ABI()
         self.nwp = _ICON()
-        self.cmic = _NWCSAF(dependencies={self.sat, self.nwp})
+        self.cmic = _NWCSAF(dependencies={"sat": self.sat, "nwp": self.nwp})
         self.ground = _SYNOP()
-        self.dem = _DEM()
-        self.fog = _Fog(dependencies=(self.sat, self.cmic, self.dem))
+        self.dem = _DEM("new-england")
+        self.fog = _Fog(dependencies={"sat": self.sat, "cmic": self.cmic,
+                                      "dem": self.dem})
 
     def __setattr__(self, k, v):
         getattr(self, k)  # will trigger AttributeError if not found
@@ -173,7 +180,7 @@ class _DB(abc.ABC):
         ...
 
     def __init__(self, dependencies=None):
-        self.dependencies = dependencies if dependencies else []
+        self.dependencies = dependencies if dependencies else {}
         self.base = sattools.io.get_cache_dir(subdir="fogtools") / "nwcsaf"
         self._data = {}
 
@@ -194,7 +201,7 @@ class _DB(abc.ABC):
         return True
 
     def ensure_deps(self, timestamp):
-        for dep in self.dependencies:
+        for dep in self.dependencies.values():
             dep.ensure(timestamp)
         self.link(dep, timestamp)
 
@@ -305,7 +312,7 @@ class _ICON(_NWP):
 
     def get_path(self, timestamp):
         rb = sky.RequestBuilder(self.base)
-        period = timestamp  # TODO: timestamp to period
+        period = sky.timestamp2period(timestamp)
         rb.get_request_ba(sky.period2daterange(period))
         return rb.expected_output_files
 
@@ -316,7 +323,7 @@ class _ICON(_NWP):
         This will come from ICON.
         """
 
-        period = timestamp  # TODO: timestamp to period
+        period = sky.timestamp2period(timestamp)
         self._generated[timestamp] = sky.get_and_send(self.base, period)
 
 
@@ -403,22 +410,94 @@ class _Ground(_DB):
 
 
 class _SYNOP(_Ground):
-    def load(self, timestamp):
-        # this should use the isd module
-        #
-        # - check if data are present (where?)
-        # - if not, get from ISD
-        raise NotImplementedError()
+    reader = None  # cannot be read with Satpy
+
+    def get_path(self, timestamp):
+        return isd.get_db_location()
+
+    _db = None
+    def load(self, timestamp, tol=pandas.Timedelta("30m")):
+        """Get ground based measurements from Integrated Surface Dataset
+
+        Return ground based measurements from the Integrated Surface Dataset
+        (ISD) for timestamp within tolerance.
+
+        Args:
+            timestamp (pandas.Timestamp): Time for which to locate
+                measurements.
+            tol (Optional[pandas.Timedelta]): Tolerance, measurements how long
+                before or after the requested time to consider a match.
+                Defaults to 30m.
+
+        Returns:
+            pandas.Dataframe with measurements
+        """
+        if self._db is None:
+            self._db = isd.read_db()
+        selection = ((self._db.DATE > timestamp-tol) &
+                     (self._db.DATE < timestamp+tol))
+        return self._db.loc[selection]
+
+    def store(self, timestamp):
+        isd.create_db()
 
 
 class _DEM(_DB):
-    def load(self):
-        raise NotImplementedError()
+    reader = "generic_image"
+
+    dem_new_england = pathlib.Path("/media/nas/x21308/DEM/USGS/merged-500.tif")
+    dem_europe = pathlib.Path("/media/nas/x21308/DEM/dem_eu_1km.tif")
+    location = None
+
+    def __init__(self, region):
+        """Initialise DEM class
+
+        Initialise class to provide DEM information to database.
+
+        Args:
+            region (str): Either "new-england" or "europe"
+        """
+        self.location = getattr(self, "dem_" + region.replace("-", "_"))
+
+
+    def get_path(self, _):
+        return self.location
+
+
+    def store(self, _):
+        if self.location == self.dem_new_england:
+            logging.info("Downloading DEMs")
+            out_all = dem.dl_usgs_dem_in_range(38, 49, -82, -66,
+                                               self.location.parent)
+        else:
+            raise NotImplementedError("Can only download New England DEM")
+        with tempfile.NamedTemporaryFile() as ntf:
+            logger.info("Merging DEMs")
+            subprocess.run(["gdal_merge.py", "-o", ntf.name] +
+                           [str(p) for p in out_all],
+                           check=True)
+            subprocess.run(
+                    ["gdalwarp", "-r", "bilinear", "-t_srs", "+proj=eqc "
+                     "+lat_ts=0 +lat_0=0 +lon_0=0 +x_0=0 +y_0=0 +ellps=WGS84 "
+                     "+units=m +no_defs +type=crs", "-tr", "500", "500",
+                     ntf.name, str(self.location)],
+                    check=True)
 
 
 class _Fog(_DB):
-    def load(timestamp):
-        raise NotImplementedError()
+    reader = "generic_image"  # stored as geotiff
+
+    def get_path(self, timestamp, sensorreader="nwcsaf-geo"):
+        d = sattools.io.get_cache_dir(subdir="fogtools") / fog
+        return [d / f"fog-{timestamp:%Y%m%d-%H%M}.tif"]
+
+    def store(self, timestamp):
+        self.dependecies["sat"]
+        sc = core.get_fog_blend_for_sat(
+                self.dependencies["sat"].get_path(),
+                self.dependencies["cmic"].get_path(),
+                "new-england-500")
+        sc.save_dataset("fls_day", self.get_path()[0])
 
 
 class _IFS(_NWP):
