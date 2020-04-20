@@ -18,7 +18,7 @@ import abc
 
 import sattools.io
 
-from . import abi, sky, isd, core
+from . import abi, sky, isd, core, dem
 
 logger = logging.getLogger(__name__)
 
@@ -113,7 +113,7 @@ class FogDB:
     #   - symlinks for NWCSAF dependencies
     #   - collect results
     #   - add results to database
-    #   - some way to tell classes where data are (such as for fog)
+    #   - fix get_path for ABI
 
     sat = nwp = cmic = ground = dem = fog = data = None
 
@@ -173,6 +173,7 @@ class _DB(abc.ABC):
     dependencies = None
     base = None
     _data = None
+    _generated = None  # dictionary keeping track of data files per timestamp
 
     @property
     @abc.abstractmethod
@@ -181,8 +182,9 @@ class _DB(abc.ABC):
 
     def __init__(self, dependencies=None):
         self.dependencies = dependencies if dependencies else {}
-        self.base = sattools.io.get_cache_dir(subdir="fogtools") / "nwcsaf"
+        self.base = sattools.io.get_cache_dir(subdir="fogtools") / "fogdb"
         self._data = {}
+        self._generated = {}
 
     @abc.abstractmethod
     def get_path(self, timestamp):
@@ -262,12 +264,16 @@ class _ABI(_Sat):
     reader = "abi_l1b"
 
     def get_path(self, timestamp):
-        raise NotImplementedError("Cannot calculate path for ABI")
+        if timestamp in self._generated:
+            return self._generated[timestamp]
+        else:
+            raise NotImplementedError("Cannot calculate path for ABI before "
+                                      "data are available")
 
     def exists(self, timestamp):
         for chan in abi.nwcsaf_abi_channels | abi.fogpy_abi_channels:
             dl_dir = abi.get_dl_dir(
-                    sattools.io.get_cache_dir(subdir="fogtools"),
+                    self.basedir,
                     timestamp,
                     chan)
             cnt = list(dl_dir.glob(f"*C{chan:>02d}*"))
@@ -277,7 +283,9 @@ class _ABI(_Sat):
                 raise FogDBError(f"Channel {chan:d} found multiple times in "
                                  f"{dl_dir!s}?! " + ", ".join(
                                      str(c) for c in cnt))
-        return True
+        else:
+            return True
+        raise RuntimeError("This code is unreachable")
 
     def store(self, timestamp):
         """Store ABI for timestamp
@@ -416,6 +424,7 @@ class _SYNOP(_Ground):
         return isd.get_db_location()
 
     _db = None
+
     def load(self, timestamp, tol=pandas.Timedelta("30m")):
         """Get ground based measurements from Integrated Surface Dataset
 
@@ -459,10 +468,8 @@ class _DEM(_DB):
         """
         self.location = getattr(self, "dem_" + region.replace("-", "_"))
 
-
     def get_path(self, _):
         return self.location
-
 
     def store(self, _):
         if self.location == self.dem_new_england:
@@ -488,8 +495,7 @@ class _Fog(_DB):
     reader = "generic_image"  # stored as geotiff
 
     def get_path(self, timestamp, sensorreader="nwcsaf-geo"):
-        d = sattools.io.get_cache_dir(subdir="fogtools") / fog
-        return [d / f"fog-{timestamp:%Y%m%d-%H%M}.tif"]
+        return [self.basedir / f"fog-{timestamp:%Y%m%d-%H%M}.tif"]
 
     def store(self, timestamp):
         self.dependecies["sat"]

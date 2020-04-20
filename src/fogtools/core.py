@@ -3,10 +3,7 @@
 
 import satpy
 import satpy.writers
-import trollimage.xrimage
-import trollimage.colormap
 
-import xarray
 import sattools.ptc
 
 

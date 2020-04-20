@@ -7,9 +7,9 @@ import trollimage.xrimage
 import trollimage.colormap
 
 import xarray
-import sattools.ptc
 
 from . import core
+
 
 def blend_fog(sc, other="overview"):
     """Blend fog onto composite
