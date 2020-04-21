@@ -7,6 +7,8 @@ of fogpy and satpy, to make the code more maintainable by improved modularity
 and adding unitests, and to support ground data over the USA.
 """
 
+import os
+import time
 import logging
 import subprocess
 import tempfile
@@ -23,7 +25,7 @@ from . import abi, sky, isd, core, dem
 logger = logging.getLogger(__name__)
 
 
-class FogDBError:
+class FogDBError(Exception):
     pass
 
 
@@ -109,11 +111,9 @@ class FogDB:
     # files to appear.  Where does asyncio come in exactly?
 
     # TODO:
-    #   - use concurrent.futures
-    #   - symlinks for NWCSAF dependencies
+    #   - use concurrent.futures (but try linear/serial first)
     #   - collect results
     #   - add results to database
-    #   - fix get_path for ABI
 
     sat = nwp = cmic = ground = dem = fog = data = None
 
@@ -178,7 +178,7 @@ class _DB(abc.ABC):
     @property
     @abc.abstractmethod
     def reader(self):
-        ...
+        raise NotImplementedError()  # pragma: no cover
 
     def __init__(self, dependencies=None):
         self.dependencies = dependencies if dependencies else {}
@@ -194,7 +194,7 @@ class _DB(abc.ABC):
         # It should probably always return a collection, which probably means I
         # need the flexibility of reimplementing it in subclasses and I can't
         # have it all defined from yaml files?
-        raise NotImplementedError()
+        raise NotImplementedError()  # pragma: no cover
 
     def exists(self, timestamp):
         for p in self.get_path(timestamp):
@@ -202,14 +202,14 @@ class _DB(abc.ABC):
                 return False
         return True
 
+    def ensure(self, timestamp):
+        if not self.exists(timestamp):
+            self.store(timestamp)
+
     def ensure_deps(self, timestamp):
         for dep in self.dependencies.values():
             dep.ensure(timestamp)
-        self.link(dep, timestamp)
-
-    def ensure(self, timestamp):
-        if not self.exists():
-            self.store()
+            self.link(dep, timestamp)
 
     def load(self, timestamp):
         sc = satpy.Scene(
@@ -226,6 +226,15 @@ class _DB(abc.ABC):
 
     def link(self, dep, timestamp):
         """If needed, add symlink for dependency
+
+        If dependency ``dep`` has been generated but generating the product for
+        self requires this to be in a certain location (such as for generating
+        NWCSAF), this method can create such a symlink or symlinks.  Subclasses
+        can override this, by default it does nothing.
+
+        Args:
+            dep (_DB): dependency in question
+            timestamp (pandas.Timestamp): Time for which to generate
         """
         pass
 
@@ -271,9 +280,12 @@ class _ABI(_Sat):
                                       "data are available")
 
     def exists(self, timestamp):
+        """Check if all files at timestamp exist
+        """
+
         for chan in abi.nwcsaf_abi_channels | abi.fogpy_abi_channels:
             dl_dir = abi.get_dl_dir(
-                    self.basedir,
+                    self.base,
                     timestamp,
                     chan)
             cnt = list(dl_dir.glob(f"*C{chan:>02d}*"))
@@ -285,7 +297,7 @@ class _ABI(_Sat):
                                      str(c) for c in cnt))
         else:
             return True
-        raise RuntimeError("This code is unreachable")
+        raise RuntimeError("This code is unreachable")  # pragma: no cover
 
     def store(self, timestamp):
         """Store ABI for timestamp
@@ -301,8 +313,15 @@ class _ABI(_Sat):
         # have been downloaded, in particular for the benefit of NWCSAF.  How
         # to do this matching?  Could use pathlib.Path.match or perhaps
         # satpy.readers.group_files.
+        #
+        # cannot match against {timestamp:%Y%j%H%M%S%f} (which I copied from
+        # the Satpy abi.yaml definition file): strftime will always
+        # generate a 6-digit microsecond component, but the ABI filenames only
+        # contain a single digit for deciseconds (see PUG L1B, Volume 3, page
+        # 291, # PDF page 326).  This doesn't affect strptime which is
+        # apparently what Satpy uses.
         selection = [p for p in files if p.match(
-            f"*_s{timestamp:%Y%j%H%M%S%f}_*.nc")]
+            f"*_s{timestamp:%Y%j%H%M%S}*.nc")]
         sc = satpy.Scene(
                 filenames=selection,
                 reader="abi_l1b")
@@ -322,7 +341,9 @@ class _ICON(_NWP):
         rb = sky.RequestBuilder(self.base)
         period = sky.timestamp2period(timestamp)
         rb.get_request_ba(sky.period2daterange(period))
-        return rb.expected_output_files
+        exp = rb.expected_output_files
+        # I don't care about the logfiles "ihits" and "info"
+        return {e for e in exp if e.suffix == ".grib"}
 
     def store(self, timestamp):
         """Get model analysis and forecast for input to NWCSAF
@@ -370,7 +391,6 @@ class _NWCSAF(_CMIC):
         self.ensure_deps(timestamp)
         if not self.is_running():
             self.start_running()
-        # await existance of file?  Or up to caller?
 
     @staticmethod
     def is_running():
@@ -382,6 +402,10 @@ class _NWCSAF(_CMIC):
         1 (such as with a signal).  Raises a FogDBError if the task manager
         exited successfully but with an unexpected output.
         """
+
+        # need to use a temporary file because ``tm`` refuses to write to a
+        # pipe (it will fail with Segmentation Fault), it can write to a file
+        # with the -o flag
         with tempfile.NamedTemporaryFile(mode="rb") as ntf:
             try:
                 subprocess.run(["tm", f"-o{ntf.name:s}", "status"], check=True)
@@ -409,8 +433,46 @@ class _NWCSAF(_CMIC):
         logging.debug("Starting NWCSAF software")
         return subprocess.run(["SAFNWCTM"], check=True)
 
+    @staticmethod
+    def _get_dep_loc(dep):
+        safnwc = os.getenv("SAFNWC")
+        if not safnwc:
+            raise FogDBError("Environment variable SAFNWC not set")
+        p = pathlib.Path(safnwc) / "import"
+        if isinstance(dep, _Sat):
+            return p / "Sat_data"
+        elif isinstance(dep, _NWP):
+            return p / "NWP_data"
+        else:
+            raise TypeError("Passed unrecognised dependency type: "
+                            f"{type(dep)!s}")
+
     def link(self, dep, timestamp):
-        raise NotImplementedError()
+        link_dsts = dep.get_path()
+        link_src_dir = self._get_dep_loc(dep)
+        for p in link_dsts:
+            (link_src_dir / p.name).symlink_to(p)
+
+    def wait_for_output(self, timestamp, timeout=600):
+        """Wait for SAFNWC outputs
+
+        With the SAFNWC code running, wait until the results are there.
+        """
+        if not self.is_running():
+            raise FogDBError("SAFNWC is not running")
+        logging.info("Waiting for SAFNWC output")
+        t = 0
+        of = self.get_path(timestamp)[0]
+        while t < timeout:
+            if of.exists():
+                return
+            time.sleep(10)
+            t += 10
+        else:
+            raise FogDBError(f"No SAFNWC result after {timeout:d} s")
+
+    def ensure(self, timestamp):
+        self.wait_for_output(timestamp)
 
 
 class _Ground(_DB):
