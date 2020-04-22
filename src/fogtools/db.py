@@ -222,7 +222,7 @@ class _DB(abc.ABC):
     def store(self, timestamp):
         """Store in cache.
         """
-        raise NotImplementedError()
+        raise NotImplementedError()  # pragma: no cover
 
     def link(self, dep, timestamp):
         """If needed, add symlink for dependency
@@ -435,6 +435,12 @@ class _NWCSAF(_CMIC):
 
     @staticmethod
     def _get_dep_loc(dep):
+        """Find location from where dependency should be symlinked
+
+        The SAFNWC software expects input data to be in a particular directory,
+        but the data may be elsewhere.  This static method determines where
+        these data are expected by the SAFNWC software.
+        """
         safnwc = os.getenv("SAFNWC")
         if not safnwc:
             raise FogDBError("Environment variable SAFNWC not set")
@@ -448,8 +454,9 @@ class _NWCSAF(_CMIC):
                             f"{type(dep)!s}")
 
     def link(self, dep, timestamp):
-        link_dsts = dep.get_path()
+        link_dsts = dep.get_path(timestamp)
         link_src_dir = self._get_dep_loc(dep)
+        link_src_dir.mkdir(exist_ok=True, parents=True)
         for p in link_dsts:
             (link_src_dir / p.name).symlink_to(p)
 

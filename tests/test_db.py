@@ -1,4 +1,6 @@
 import pathlib
+import functools
+import subprocess
 import unittest.mock
 
 import numpy.testing
@@ -19,20 +21,26 @@ def ts():
     return pandas.Timestamp("1900-01-01T00:00:00Z")
 
 
+def _dbprep(tmp_path, cls, *args, **kwargs):
+    import fogtools.db
+    db = getattr(fogtools.db, cls)(*args, **kwargs)
+    db.base = tmp_path / str(cls)
+    return db
+
+
 @pytest.fixture
 def abi(tmp_path):
-    import fogtools.db
-    abi = fogtools.db._ABI()
-    abi.base = tmp_path
-    return abi
+    return _dbprep(tmp_path, "_ABI")
 
 
 @pytest.fixture
 def icon(tmp_path):
-    import fogtools.db
-    icon = fogtools.db._ICON()
-    icon.base = tmp_path
-    return icon
+    return _dbprep(tmp_path, "_ICON")
+
+
+@pytest.fixture
+def nwcsaf(tmp_path, abi, icon):
+    return _dbprep(tmp_path, "_NWCSAF", dependencies={"sat": abi, "nwp": icon})
 
 
 def test_init(db):
@@ -184,5 +192,109 @@ class TestICON:
                 reader="grib")
 
 
-# concrete methods in abstract class still to be tested:
-#   - ensure_deps
+class TestNWCSAF:
+    def test_get_path(self, nwcsaf, ts):
+        ps = nwcsaf.get_path(ts)
+        assert ps == [(nwcsaf.base / "1900" / "01" / "01"
+                      / "S_NWC_CMIC_GOES16_NEW-ENGLAND-NR_"
+                      "19000101T000000Z.nc")]
+
+    def test_store(self, nwcsaf, ts):
+        nwcsaf.ensure_deps = unittest.mock.MagicMock()
+        nwcsaf.is_running = unittest.mock.MagicMock()
+        nwcsaf.start_running = unittest.mock.MagicMock()
+        nwcsaf.is_running.return_value = True
+        nwcsaf.store(ts)
+        nwcsaf.ensure_deps.assert_called_once_with(ts)
+        nwcsaf.is_running.return_value = False
+        nwcsaf.store(ts)
+        nwcsaf.start_running.assert_called_once_with()
+
+    @unittest.mock.patch("subprocess.run", autospec=True)
+    def test_is_running(self, sr, nwcsaf, ts):
+        import fogtools.db
+
+        def mock_sr(args, check, txt):
+            with open(args[1][2:], "wb") as fp:
+                fp.write(txt)
+        sr.side_effect = functools.partial(mock_sr, txt=b"Active Mode")
+        assert nwcsaf.is_running()
+        sr.side_effect = subprocess.CalledProcessError(
+                returncode=1, cmd="tm-dummy")
+        assert not nwcsaf.is_running()
+        sr.side_effect = functools.partial(mock_sr, txt=b"fruit")
+        with pytest.raises(fogtools.db.FogDBError):
+            nwcsaf.is_running()
+        sr.side_effect = subprocess.CalledProcessError(
+                returncode=2, cmd="tm-dummy")
+        with pytest.raises(subprocess.CalledProcessError):
+            nwcsaf.is_running()
+
+    @unittest.mock.patch("subprocess.run", autospec=True)
+    def test_start_running(self, sr, nwcsaf):
+        nwcsaf.start_running()
+        sr.assert_called_once_with(["SAFNWCTM"], check=True)
+
+    def test_get_dep_loc(self, nwcsaf, abi, icon, monkeypatch, tmp_path):
+        import fogtools.db
+        monkeypatch.setenv("SAFNWC", str(tmp_path))
+        p = nwcsaf._get_dep_loc(abi)
+        assert p == tmp_path / "import" / "Sat_data"
+        p = nwcsaf._get_dep_loc(icon)
+        assert p == tmp_path / "import" / "NWP_data"
+        with pytest.raises(TypeError):
+            nwcsaf._get_dep_loc(object())
+        monkeypatch.delenv("SAFNWC")
+        with pytest.raises(fogtools.db.FogDBError):
+            nwcsaf._get_dep_loc(abi)
+
+    def test_link(self, nwcsaf, abi, icon, ts, monkeypatch, tmp_path):
+        monkeypatch.setenv("SAFNWC", str(tmp_path))
+        abi._generated[ts] = [tmp_path / "abi" / "abi.nc"]
+        nwcsaf.link(abi, ts)
+        exp = tmp_path / "import" / "Sat_data" / "abi.nc"
+        assert exp.is_symlink()
+        assert exp.resolve() == tmp_path / "abi" / "abi.nc"
+        nwcsaf.link(icon, ts)
+        exp = (tmp_path / "import" / "NWP_data" /
+               "S_NWC_NWP_1900-01-01T00:00:00Z_002.grib")
+        assert exp.is_symlink()
+        assert (exp.resolve() == icon.base / "import" / "NWP_data" /
+                "S_NWC_NWP_1900-01-01T00:00:00Z_002.grib")
+
+    @unittest.mock.patch("time.sleep", autospec=True)
+    def test_wait_for_output(self, tisl, nwcsaf, ts, monkeypatch, tmp_path):
+        import fogtools.db
+        monkeypatch.setenv("SAFNWC", str(tmp_path))
+        nwcsaf.is_running = unittest.mock.MagicMock()
+        nwcsaf.is_running.return_value = False
+        with pytest.raises(fogtools.db.FogDBError):
+            nwcsaf.wait_for_output(ts)
+        p = nwcsaf.get_path(ts)[0]
+        p.parent.mkdir(exist_ok=True, parents=True)
+        p.touch()
+        nwcsaf.is_running.return_value = True
+        nwcsaf.wait_for_output(ts)
+        assert tisl.call_count == 0
+        p.unlink()
+        with pytest.raises(fogtools.db.FogDBError):
+            nwcsaf.wait_for_output(ts)
+            assert tisl.call_count == 60
+        nwcsaf.is_running.return_value = False
+
+    def test_ensure(self, nwcsaf, ts):
+        nwcsaf.wait_for_output = unittest.mock.MagicMock()
+        nwcsaf.ensure(ts)
+        nwcsaf.wait_for_output.assert_called_once_with(ts)
+
+    # concrete methods from parent class
+    def test_ensure_deps(self, nwcsaf, abi, icon, ts):
+        abi.ensure = unittest.mock.MagicMock()
+        icon.ensure = unittest.mock.MagicMock()
+        nwcsaf.link = unittest.mock.MagicMock()
+        nwcsaf.ensure_deps(ts)
+        abi.ensure.assert_called_once_with(ts)
+        icon.ensure.assert_called_once_with(ts)
+        assert nwcsaf.link.call_count == 2
+        nwcsaf.link.assert_any_call(abi, ts)
+        nwcsaf.link.assert_any_call(icon, ts)
