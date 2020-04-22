@@ -10,6 +10,11 @@ import xarray
 import satpy
 
 
+# TODO:
+#   - test interface into .extract: it's going to fail for those databases
+#     where results are not a Scene, but the unit tests are currently not showing
+#     that
+
 @pytest.fixture(scope="function")
 def db():
     import fogtools.db
@@ -41,6 +46,22 @@ def icon(tmp_path):
 @pytest.fixture
 def nwcsaf(tmp_path, abi, icon):
     return _dbprep(tmp_path, "_NWCSAF", dependencies={"sat": abi, "nwp": icon})
+
+
+@pytest.fixture
+def synop(tmp_path):
+    return _dbprep(tmp_path, "_SYNOP")
+
+
+@pytest.fixture
+def dem(tmp_path):
+    return _dbprep(tmp_path, "_DEM", "new-england")
+
+
+@pytest.fixture
+def fog(tmp_path, dem, nwcsaf, abi):
+    return _dbprep(tmp_path, "_Fog", dependencies=
+            {"sat": abi, "dem": dem, "cmic": nwcsaf})
 
 
 def test_init(db):
@@ -298,3 +319,71 @@ class TestNWCSAF:
         assert nwcsaf.link.call_count == 2
         nwcsaf.link.assert_any_call(abi, ts)
         nwcsaf.link.assert_any_call(icon, ts)
+
+
+class TestSYNOP:
+    def test_get_path(self, synop, monkeypatch, tmp_path):
+        monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
+        p = synop.get_path(ts)
+        assert p == tmp_path / "fogtools" / "store.parquet"
+
+    @unittest.mock.patch("fogtools.isd.read_db", autospec=True)
+    def test_load(self, fir, synop, ts):
+        fir.return_value = pandas.DataFrame(
+                {"DATE": pandas.date_range("18991231T12", "19000101T12",
+                    freq="15min", tz="UTC")})
+        sel = synop.load(ts, tol=pandas.Timedelta("31min"))
+        assert sel.shape == (5, 1)
+        assert sel.DATE.iloc[0] == pandas.Timestamp("18991231T2330Z")
+        assert sel.DATE.iloc[-1] == pandas.Timestamp("19000101T0030Z")
+
+    @unittest.mock.patch("fogtools.isd.create_db", autospec=True)
+    def test_store(self, fic, synop):
+        synop.store(object())
+        fic.assert_called_once_with()
+
+
+class TestDEM:
+    def test_get_path(self, dem):
+        p = dem.get_path(object())
+        assert p == pathlib.Path("/media/nas/x21308/DEM/USGS/merged-500.tif")
+
+    @unittest.mock.patch("urllib.request.urlretrieve", autospec=True)
+    @unittest.mock.patch("subprocess.run", autospec=True)
+    @unittest.mock.patch("tempfile.NamedTemporaryFile", autospec=True)
+    def test_store(self, tN, sr, uru, dem, tmp_path):
+        dem.location = dem.dem_new_england = tmp_path / "fake.tif"
+        mtf = tmp_path / "raspberry"
+        tN.return_value.__enter__.return_value.name = str(tmp_path
+                / "raspberry")
+        dem.store(object())
+        assert sr.call_count == 2
+        c1 = unittest.mock.call(["gdal_merge.py", "-o", str(mtf)] +
+                [str(mtf.parent / f"n{lat:>02d}w{lon:>03d}" / (("" if ext=="gpkg" else "USGS_1_") +
+                         f"n{lat:>02d}w{lon:>03d}.{ext:s}"))
+                    for lat in range(38, 49)
+                    for lon in range(82, 66, -1)
+                    for ext in ["tif", "jpg", "xml", "gpkg"]],
+                check=True)
+        c2 = unittest.mock.call(["gdalwarp", "-r", "bilinear", "-t_srs",
+            "+proj=eqc +lat_ts=0 +lat_0=0 +lon_0=0 +x_0=0 +y_0=0 +ellps=WGS84 +units=m "
+            "+no_defs +type=crs", "-tr", "500", "500", str(mtf), str(tmp_path /
+            "fake.tif")], check=True)
+        sr.assert_has_calls([c1, c2])
+        dem.location = dem.dem_europe = "fribbulus xax"
+        with pytest.raises(NotImplementedError):
+            dem.store(object())
+
+
+class TestFog:
+    def test_get_path(self, fog, ts):
+        p = fog.get_path(ts)
+        assert p == [fog.base / "fog-19000101-0000.tif"]
+
+    @unittest.mock.patch("satpy.Scene")
+    def test_store(self, sS, fog, abi, ts):
+        abi._generated[ts] = [pathlib.Path("/banana")]
+        fog.store(ts)
+        sS.return_value.resample.return_value.save_dataset.assert_called_once_with(
+                "fls_day",
+                fog.base / "fog-19000101-0000.tif")

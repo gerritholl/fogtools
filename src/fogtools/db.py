@@ -516,7 +516,7 @@ class _SYNOP(_Ground):
                      (self._db.DATE < timestamp+tol))
         return self._db.loc[selection]
 
-    def store(self, timestamp):
+    def store(self, _):
         isd.create_db()
 
 
@@ -564,43 +564,15 @@ class _Fog(_DB):
     reader = "generic_image"  # stored as geotiff
 
     def get_path(self, timestamp, sensorreader="nwcsaf-geo"):
-        return [self.basedir / f"fog-{timestamp:%Y%m%d-%H%M}.tif"]
+        return [self.base / f"fog-{timestamp:%Y%m%d-%H%M}.tif"]
 
     def store(self, timestamp):
-        self.dependecies["sat"]
-        sc = core.get_fog_blend_for_sat(
-                self.dependencies["sat"].get_path(),
-                self.dependencies["cmic"].get_path(),
+        sc = core.get_fog(
+                "abi_l1b",
+                self.dependencies["sat"].get_path(timestamp),
+                self.dependencies["cmic"].get_path(timestamp),
                 "new-england-500")
-        sc.save_dataset("fls_day", self.get_path()[0])
+        sc.save_dataset("fls_day", self.get_path(timestamp)[0])
 
 
-class _IFS(_NWP):
-    def load(self, timestamp):
-        """Get model analysis and forecast for comparison
-
-        Get model analysis and forecast for comparing the fog result with.
-        This may be from a regional model; Thomas Leppelt was using COSMO but
-        that won't work in North-America.  Could also compare with IFS from
-        ECMWF.  Need to think of a flexible way of implementing this, perhaps
-        by passing a bunch of classes that each implement the same interface.
-        """
-
-        raise NotImplementedError()
-
-
-class _COSMO(_NWP):
-    def load(self, timestamp):
-        raise NotImplementedError()
-
-
-class _METAR(_Ground):
-    def load(self, timestamp):
-        # metar is another source of ground truth
-        raise NotImplementedError()
-
-
-class _SWIS(_Ground):
-    def load(self, timestamp):
-        # swis is another source of ground truth
-        raise NotImplementedError()
+# TODO: _IFS, _COSMO, _METAR, _SWIS
