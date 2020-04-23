@@ -132,11 +132,20 @@ class FogDB:
 
     def extend(self, timestamp):
         """Add data from <timestamp> to database
+
+        This module extends the database, creatig it if it doesn't exist yet,
+        with measurements for the time indicated by <timestamp>.  It calculates
+        ground station measurements, then uses the lats and lons
+
+        Args:
+            timestamp (pandas.Timestamp): Time for which to add data to
+            database
         """
 
         dfs = []
         # first get the ground stations: these determine which points I want to
         # extract
+        logger.info("Loading data for {timestamp:%Y-%m-%d %H:%M:%S}")
         synop = self.ground.load(timestamp)
         lats = synop.index.get_level_values("LATITUDE")
         lons = synop.index.get_level_values("LONGITUDE")
@@ -163,6 +172,7 @@ class FogDB:
         """
         if self.data is None:
             raise ValueError("No entries in database!")
+        logger.info(f"Storing database to {f!s}")
         self.data.to_parquet(f)
 
 
@@ -195,6 +205,7 @@ class _DB(abc.ABC):
         raise NotImplementedError()  # pragma: no cover
 
     def __init__(self, dependencies=None):
+        logger.debug(f"Initialising {self.__class__!s}")
         self.dependencies = dependencies if dependencies else {}
         self.base = sattools.io.get_cache_dir(subdir="fogtools") / "fogdb"
         self._data = {}
@@ -221,11 +232,13 @@ class _DB(abc.ABC):
             self.store(timestamp)
 
     def ensure_deps(self, timestamp):
-        for dep in self.dependencies.values():
+        for (k, dep) in self.dependencies.items():
+            logger.debug(f"Ensuring dependency {k:s}")
             dep.ensure(timestamp)
             self.link(dep, timestamp)
 
     def load(self, timestamp):
+        logger.debug(f"Loading with {self.__class__!s}")
         sc = satpy.Scene(
                 filenames=self.get_path(timestamp),
                 reader=self.reader)
@@ -270,6 +283,7 @@ class _DB(abc.ABC):
             pandas.DataFrame with the desired data
         """
         sc = self.load(timestamp)
+        logger.debug(f"Extracting lat/lons for {self.__class__!s}")
         vals = {}
         for da in sc:
             (x, y) = da.attrs["area"].get_xy_from_lonlat(lons, lats)
@@ -337,6 +351,7 @@ class _ABI(_Sat):
         # contain a single digit for deciseconds (see PUG L1B, Volume 3, page
         # 291, # PDF page 326).  This doesn't affect strptime which is
         # apparently what Satpy uses.
+        logger.debug("Loading ABI")
         selection = [p for p in files if p.match(
             f"*_s{timestamp:%Y%j%H%M%S}*.nc")]
         sc = satpy.Scene(
@@ -423,6 +438,7 @@ class _NWCSAF(_CMIC):
         # need to use a temporary file because ``tm`` refuses to write to a
         # pipe (it will fail with Segmentation Fault), it can write to a file
         # with the -o flag
+        logger.debug("Checking NWCSAF software status")
         with tempfile.NamedTemporaryFile(mode="rb") as ntf:
             try:
                 subprocess.run(["tm", f"-o{ntf.name:s}", "status"], check=True)
@@ -447,7 +463,7 @@ class _NWCSAF(_CMIC):
         Returns:
             CalledProcess
         """
-        logging.debug("Starting NWCSAF software")
+        logger.debug("Starting NWCSAF software")
         return subprocess.run(["SAFNWCTM"], check=True)
 
     @staticmethod
@@ -471,6 +487,7 @@ class _NWCSAF(_CMIC):
                             f"{type(dep)!s}")
 
     def link(self, dep, timestamp):
+        logger.debug("Linking NWCSAF dependenices")
         link_dsts = dep.get_path(timestamp)
         link_src_dir = self._get_dep_loc(dep)
         link_src_dir.mkdir(exist_ok=True, parents=True)
@@ -484,7 +501,7 @@ class _NWCSAF(_CMIC):
         """
         if not self.is_running():
             raise FogDBError("SAFNWC is not running")
-        logging.info("Waiting for SAFNWC output")
+        logger.info("Waiting for SAFNWC results")
         t = 0
         of = self.get_path(timestamp)[0]
         while t < timeout:
@@ -528,6 +545,7 @@ class _SYNOP(_Ground):
             pandas.Dataframe with measurements
         """
         if self._db is None:
+            logger.debug("Reading ground measurements database from ISD")
             db = isd.read_db()
             if db.index.names != ["DATE", "LATITUDE", "LONGITUDE"]:
                 db = db.set_index(["DATE", "LATITUDE", "LONGITUDE"])
@@ -560,7 +578,7 @@ class _DEM(_DB):
 
     def store(self, _):
         if self.location == self.dem_new_england:
-            logging.info("Downloading DEMs")
+            logger.info("Downloading DEMs")
             out_all = dem.dl_usgs_dem_in_range(38, 49, -82, -66,
                                                self.location.parent)
         else:
@@ -585,6 +603,7 @@ class _Fog(_DB):
         return [self.base / f"fog-{timestamp:%Y%m%d-%H%M}.tif"]
 
     def store(self, timestamp):
+        logger.info("Calculating fog")
         sc = core.get_fog(
                 "abi_l1b",
                 self.dependencies["sat"].get_path(timestamp),

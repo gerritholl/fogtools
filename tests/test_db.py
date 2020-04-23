@@ -133,7 +133,7 @@ def test_extend(fir, db, fake_df, ts):
     db.fog.extract.return_value = _mkdf(gd.index[:3], "aubergine", "shallot")
     db.extend(ts)
     assert db.data.shape == (10, 11)
-    # FIXME: this needs to test tolerances too, and now it has nans, will that
+    # TODO: this needs to test tolerances too, and now it has nans, will that
     # happen in the real world?  Perhaps.
 
 
@@ -217,6 +217,8 @@ class TestABI:
         abi.link(None, None)  # this doesn't do anything
 
     def test_extract(self, abi, ts, fakescene):
+        # TODO: this needs to test what happens if lat/lon are out of the area.
+        # What does pyresample do here?  NAN or exception?
         abi.load = unittest.mock.MagicMock()
         abi.load.return_value = fakescene
         df = abi.extract(ts, numpy.array([10, 10]), numpy.array([10, 15]))
