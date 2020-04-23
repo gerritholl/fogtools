@@ -142,7 +142,6 @@ class FogDB:
             database
         """
 
-        dfs = []
         # first get the ground stations: these determine which points I want to
         # extract
         logger.info(f"Loading data for {timestamp:%Y-%m-%d %H:%M:%S}")
@@ -288,7 +287,8 @@ class _DB(abc.ABC):
         for da in sc:
             (x, y) = da.attrs["area"].get_xy_from_lonlat(lons, lats)
             vals[da.attrs["name"]] = da.data[x, y]
-        return pandas.DataFrame(vals,
+        return pandas.DataFrame(
+                vals,
                 index=pandas.MultiIndex.from_arrays(
                     [pandas.Series(timestamp).repeat(lats.size), lats, lons],
                     names=["DATE", "LATITUDE", "LONGITUDE"]))

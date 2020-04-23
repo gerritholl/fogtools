@@ -1,7 +1,7 @@
 """Test the build-db script
 """
 
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 import pandas
 
@@ -21,4 +21,5 @@ def test_main(fdF, fpbp, tmp_path):
             ["/no/out/file",
              "--date", "198508131515"])
     fogtools.processing.build_db.main()
-    fdF.return_value.extend.assert_called_with(pandas.Timestamp("198508131515"))
+    fdF.return_value.extend.assert_called_with(
+            pandas.Timestamp("198508131515"))
