@@ -145,7 +145,7 @@ class FogDB:
         dfs = []
         # first get the ground stations: these determine which points I want to
         # extract
-        logger.info("Loading data for {timestamp:%Y-%m-%d %H:%M:%S}")
+        logger.info(f"Loading data for {timestamp:%Y-%m-%d %H:%M:%S}")
         synop = self.ground.load(timestamp)
         lats = synop.index.get_level_values("LATITUDE")
         lons = synop.index.get_level_values("LONGITUDE")

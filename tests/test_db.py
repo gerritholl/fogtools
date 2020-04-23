@@ -2,6 +2,7 @@ import pathlib
 import functools
 import subprocess
 import unittest.mock
+import logging
 
 import numpy.testing
 import pandas
@@ -112,7 +113,7 @@ def test_init(db):
 
 
 @unittest.mock.patch("fogtools.isd.read_db", autospec=True)
-def test_extend(fir, db, fake_df, ts):
+def test_extend(fir, db, fake_df, ts, caplog):
     db.sat = unittest.mock.MagicMock()
     db.nwp = unittest.mock.MagicMock()
     db.cmic = unittest.mock.MagicMock()
@@ -125,7 +126,9 @@ def test_extend(fir, db, fake_df, ts):
     db.cmic.extract.return_value = _mkdf(gd.index, "peach", "redcurrant")
     db.dem.extract.return_value = _mkdf(gd.index, "damson", "prune")
     db.fog.extract.return_value = _mkdf(gd.index, "aubergine", "shallot")
-    db.extend(ts)
+    with caplog.at_level(logging.INFO):
+        db.extend(ts)
+        assert "Loading data for 1900-01-01 00:00:00" in caplog.text
     assert sorted(db.data.columns) == [
             "apricot", "aubergine", "banana", "damson", "peach", "pineapple",
             "prune", "raspberry", "redcurrant", "shallot", "values"]
