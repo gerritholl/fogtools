@@ -135,14 +135,28 @@ class FogDB:
         """
 
         dfs = []
-        for src in (self.sat, self.nwp, self.cmic, self.ground, self.dem,
-                    self.fog):
-            dfs.append(src.extract())
-        df = pandas.concat(dfs, axis=1)
+        # first get the ground stations: these determine which points I want to
+        # extract
+        synop = self.ground.load(timestamp)
+        lats = synop.index.get_level_values("LATITUDE")
+        lons = synop.index.get_level_values("LONGITUDE")
+        fogdata = self.fog.extract(timestamp, lats, lons)
+        # FIXME: use concurrent.futures here
+        # extract will also call .load thus taking care of dependencies
+        satdata = self.sat.extract(timestamp, lats, lons)
+        nwpdata = self.nwp.extract(timestamp, lats, lons)
+        # FIXME: with concurrent.futures, wait for sat and nwp to be finished
+        cmicdata = self.cmic.extract(timestamp, lats, lons)
+        demdata = self.dem.extract(timestamp, lats, lons)
+        # FIXME: with concurrent.futures, wait for cmic and dem to be finished
+        # FIXME: rename some fields?
+        # FIXME: this needs a tolerance on the time, perhaps lat/lon too
+        df = pandas.concat([synop, satdata, nwpdata, cmicdata, demdata,
+                            fogdata], axis=1)
         if self.data is None:
             self.data = df
         else:
-            self.data = pandas.concat(self.data, df, axis=0)
+            self.data = pandas.concat([self.data, df], axis=0)
 
     def store(self, f):
         """Store database to file
@@ -260,7 +274,10 @@ class _DB(abc.ABC):
         for da in sc:
             (x, y) = da.attrs["area"].get_xy_from_lonlat(lons, lats)
             vals[da.attrs["name"]] = da.data[x, y]
-        return pandas.DataFrame(vals)
+        return pandas.DataFrame(vals,
+                index=pandas.MultiIndex.from_arrays(
+                    [pandas.Series(timestamp).repeat(lats.size), lats, lons],
+                    names=["DATE", "LATITUDE", "LONGITUDE"]))
 
 
 class _Sat(_DB):
@@ -511,10 +528,11 @@ class _SYNOP(_Ground):
             pandas.Dataframe with measurements
         """
         if self._db is None:
-            self._db = isd.read_db()
-        selection = ((self._db.DATE > timestamp-tol) &
-                     (self._db.DATE < timestamp+tol))
-        return self._db.loc[selection]
+            db = isd.read_db()
+            if db.index.names != ["DATE", "LATITUDE", "LONGITUDE"]:
+                db = db.set_index(["DATE", "LATITUDE", "LONGITUDE"])
+            self._db = db
+        return self._db.loc[timestamp-tol:timestamp+tol]
 
     def store(self, _):
         isd.create_db()

@@ -34,6 +34,48 @@ def _dbprep(tmp_path, cls, *args, **kwargs):
 
 
 @pytest.fixture
+def fakescene():
+    # let's make a Scene
+    #
+    # should I mock get_xy_from_lonlat here?  Probably as it's an external
+    # dependency that I can assume to be correct, and it simplifies the
+    # unit test here.
+    sc = satpy.Scene()
+    sc["raspberry"] = xarray.DataArray(
+            numpy.arange(25).reshape(5, 5),
+            attrs={"area": unittest.mock.MagicMock(),
+                   "name": "raspberry"})
+    sc["cloudberry"] = xarray.DataArray(
+            numpy.arange(25).reshape(5, 5),
+            attrs={"area": unittest.mock.MagicMock(),
+                   "name": "cloudberry"})
+    sc["raspberry"].attrs["area"].get_xy_from_lonlat.return_value = (
+            numpy.array([1, 1]), numpy.array([1, 2]))
+    sc["cloudberry"].attrs["area"].get_xy_from_lonlat.return_value = (
+            numpy.array([2, 2]), numpy.array([2, 3]))
+    return sc
+
+
+@pytest.fixture
+def fake_df():
+    df =  pandas.DataFrame(
+            {"DATE": (dr:=pandas.date_range("18991231T12", "19000101T12",
+                freq="15min", tz="UTC")),
+             "LATITUDE": numpy.linspace(-89, 89, dr.size),
+             "LONGITUDE": numpy.linspace(-179, 179, dr.size),
+             "values": numpy.empty(shape=dr.size)})
+    return df.set_index(["DATE", "LATITUDE", "LONGITUDE"])
+
+
+def _mkdf(idx, *fields):
+    """Make a DataFrame with some fake data
+    """
+    nrows = idx.size
+    return pandas.DataFrame(numpy.empty(shape=(nrows, len(fields))),
+                            columns=fields,
+                            index=idx)
+
+@pytest.fixture
 def abi(tmp_path):
     return _dbprep(tmp_path, "_ABI")
 
@@ -69,10 +111,37 @@ def test_init(db):
     assert db.fog is not None
 
 
-@pytest.mark.skip("not implemented yet")
-def test_extend(db):
-    ts = pandas.Timestamp("1900-01-01T00:00:00Z")
+@unittest.mock.patch("fogtools.isd.read_db", autospec=True)
+def test_extend(fir, db, fake_df, ts):
+    db.sat = unittest.mock.MagicMock()
+    db.nwp = unittest.mock.MagicMock()
+    db.cmic = unittest.mock.MagicMock()
+    db.dem = unittest.mock.MagicMock()
+    db.fog = unittest.mock.MagicMock()
+    fir.return_value = fake_df
+    gd = db.ground.load(ts)
+    db.sat.extract.return_value = _mkdf(gd.index, "raspberry", "banana")
+    db.nwp.extract.return_value = _mkdf(gd.index, "apricot", "pineapple")
+    db.cmic.extract.return_value = _mkdf(gd.index, "peach", "redcurrant")
+    db.dem.extract.return_value = _mkdf(gd.index, "damson", "prune")
+    db.fog.extract.return_value = _mkdf(gd.index, "aubergine", "shallot")
     db.extend(ts)
+    assert sorted(db.data.columns) == [
+            "apricot", "aubergine", "banana", "damson", "peach", "pineapple",
+            "prune", "raspberry", "redcurrant", "shallot", "values"]
+    assert db.data.shape == (5, 11)
+    db.fog.extract.return_value = _mkdf(gd.index[:3], "aubergine", "shallot")
+    db.extend(ts)
+    assert db.data.shape == (10, 11)
+    # FIXME: this needs to test tolerances too, and now it has nans, will that
+    # happen in the real world?  Perhaps.
+
+
+def test_store(db, fake_df, tmp_path):
+    with pytest.raises(ValueError):
+        db.store(tmp_path / "nope.parquet")
+    db.data = fake_df
+    db.store(tmp_path / "yes.parquet")
 
 
 class TestABI:
@@ -147,33 +216,18 @@ class TestABI:
     def test_link(self, abi, ts):
         abi.link(None, None)  # this doesn't do anything
 
-    def test_extract(self, abi, ts):
-        # let's make a Scene
-        #
-        # should I mock get_xy_from_lonlat here?  Probably as it's an external
-        # dependency that I can assume to be correct, and it simplifies the
-        # unit test here.
-        sc = satpy.Scene()
-        sc["raspberry"] = xarray.DataArray(
-                numpy.arange(25).reshape(5, 5),
-                attrs={"area": unittest.mock.MagicMock(),
-                       "name": "raspberry"})
-        sc["cloudberry"] = xarray.DataArray(
-                numpy.arange(25).reshape(5, 5),
-                attrs={"area": unittest.mock.MagicMock(),
-                       "name": "cloudberry"})
-        sc["raspberry"].attrs["area"].get_xy_from_lonlat.return_value = (
-                numpy.array([1, 1]), numpy.array([1, 2]))
-        sc["cloudberry"].attrs["area"].get_xy_from_lonlat.return_value = (
-                numpy.array([2, 2]), numpy.array([2, 3]))
+    def test_extract(self, abi, ts, fakescene):
         abi.load = unittest.mock.MagicMock()
-        abi.load.return_value = sc
+        abi.load.return_value = fakescene
         df = abi.extract(ts, numpy.array([10, 10]), numpy.array([10, 15]))
         numpy.testing.assert_array_equal(
                 df.columns,
                 ["raspberry", "cloudberry"])
         numpy.testing.assert_array_equal(df["raspberry"], [6, 7])
         numpy.testing.assert_array_equal(df["cloudberry"], [12, 13])
+        numpy.testing.assert_array_equal(df.index.get_level_values("LATITUDE"), [10, 10])
+        numpy.testing.assert_array_equal(df.index.get_level_values("LONGITUDE"), [10, 15])
+        numpy.testing.assert_array_equal(df.index.get_level_values("DATE"), [ts, ts])
 
 
 class TestICON:
@@ -328,14 +382,19 @@ class TestSYNOP:
         assert p == tmp_path / "fogtools" / "store.parquet"
 
     @unittest.mock.patch("fogtools.isd.read_db", autospec=True)
-    def test_load(self, fir, synop, ts):
-        fir.return_value = pandas.DataFrame(
-                {"DATE": pandas.date_range("18991231T12", "19000101T12",
-                    freq="15min", tz="UTC")})
+    def test_load(self, fir, synop, ts, fake_df):
+        fir.return_value = fake_df
         sel = synop.load(ts, tol=pandas.Timedelta("31min"))
         assert sel.shape == (5, 1)
-        assert sel.DATE.iloc[0] == pandas.Timestamp("18991231T2330Z")
-        assert sel.DATE.iloc[-1] == pandas.Timestamp("19000101T0030Z")
+        assert sel.index.get_level_values("DATE")[0] == pandas.Timestamp("18991231T2330Z")
+        assert sel.index.get_level_values("DATE")[-1] == pandas.Timestamp("19000101T0030Z")
+        assert sel.index.names == ["DATE", "LATITUDE", "LONGITUDE"]
+        sel2 = synop.load(ts, tol=pandas.Timedelta("31min"))
+        assert sel.equals(sel2)
+        synop._db = None
+        fir.return_value = fake_df.reset_index()
+        sel3 = synop.load(ts, tol=pandas.Timedelta("31min"))
+        assert sel.equals(sel3)
 
     @unittest.mock.patch("fogtools.isd.create_db", autospec=True)
     def test_store(self, fic, synop):
