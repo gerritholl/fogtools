@@ -251,6 +251,7 @@ def create_db(f=None, start=pandas.Timestamp(2017, 1, 1),
             the cache directory.  File will be overwritten.
     """
     # TODO, this should merge the vis extraction
+    LOG.info("Creating ground database for fog")
     stations = select_stations(get_stations())
     ids = get_station_ids(stations)
     f = pathlib.Path(f) if f is not None else get_db_location()

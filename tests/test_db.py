@@ -389,12 +389,19 @@ class TestSYNOP:
     def test_get_path(self, synop, monkeypatch, tmp_path):
         monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
         p = synop.get_path(ts)
-        assert p == tmp_path / "fogtools" / "store.parquet"
+        assert p == [tmp_path / "fogtools" / "store.parquet"]
 
     @unittest.mock.patch("fogtools.isd.read_db", autospec=True)
-    def test_load(self, fir, synop, ts, fake_df):
+    @unittest.mock.patch("fogtools.isd.create_db", autospec=True)
+    def test_load(self, fic, fir, synop, ts, fake_df, tmp_path, monkeypatch):
+        monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
         fir.return_value = fake_df
+        def fake_store(*args):
+            (tmp_path / "fogtools").mkdir(parents=True, exist_ok=False)
+            fake_df.to_parquet(tmp_path / "fogtools" / "store.parquet")
+        fic.side_effect = fake_store
         sel = synop.load(ts, tol=pandas.Timedelta("31min"))
+        fic.assert_called_once_with()
         assert sel.shape == (5, 1)
         assert sel.index.get_level_values("DATE")[0] == pandas.Timestamp(
                 "18991231T2330Z")
@@ -407,6 +414,7 @@ class TestSYNOP:
         fir.return_value = fake_df.reset_index()
         sel3 = synop.load(ts, tol=pandas.Timedelta("31min"))
         assert sel.equals(sel3)
+        fic.assert_called_once_with()  # should not have been called twice
 
     @unittest.mock.patch("fogtools.isd.create_db", autospec=True)
     def test_store(self, fic, synop):

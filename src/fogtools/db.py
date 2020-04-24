@@ -524,7 +524,7 @@ class _SYNOP(_Ground):
     reader = None  # cannot be read with Satpy
 
     def get_path(self, timestamp):
-        return isd.get_db_location()
+        return [isd.get_db_location()]
 
     _db = None
 
@@ -544,6 +544,7 @@ class _SYNOP(_Ground):
         Returns:
             pandas.Dataframe with measurements
         """
+        self.ensure(timestamp)
         if self._db is None:
             logger.debug("Reading ground measurements database from ISD")
             db = isd.read_db()
