@@ -65,7 +65,8 @@ def fake_df():
                 freq="15min", tz="UTC")),
              "LATITUDE": numpy.linspace(-89, 89, dr.size),
              "LONGITUDE": numpy.linspace(-179, 179, dr.size),
-             "values": numpy.empty(shape=dr.size)})
+             "values": numpy.empty(shape=dr.size)}).sample(
+                     frac=1, random_state=42)
     return df.set_index(["DATE", "LATITUDE", "LONGITUDE"])
 
 
