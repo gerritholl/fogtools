@@ -115,15 +115,18 @@ def test_init(db):
     assert db.fog is not None
 
 
-@unittest.mock.patch("fogtools.isd.read_db", autospec=True)
-def test_extend(fir, db, fake_df, ts, caplog):
+def test_extend(db, fake_df, ts, caplog):
+    # function is probably mocking too much, the test passes but it fails in
+    # the real world because the preconditions before calling .extract are not
+    # met
     db.sat = unittest.mock.MagicMock()
     db.nwp = unittest.mock.MagicMock()
     db.cmic = unittest.mock.MagicMock()
     db.dem = unittest.mock.MagicMock()
     db.fog = unittest.mock.MagicMock()
-    fir.return_value = fake_df
-    gd = db.ground.load(ts)
+    with unittest.mock.patch("fogtools.isd.read_db", autospec=True) as fir:
+        fir.return_value = fake_df
+        gd = db.ground.load(ts)
     db.sat.extract.return_value = _mkdf(gd.index, "raspberry", "banana")
     db.nwp.extract.return_value = _mkdf(gd.index, "apricot", "pineapple")
     db.cmic.extract.return_value = _mkdf(gd.index, "peach", "redcurrant")
@@ -162,11 +165,19 @@ class TestABI:
         """Make some files in abi.base
 
         This should ensure that abi.exists(...) returns True.
+
+        Trick!  Make a file for 5 minutes earlier.  It will cover this
+        timestamp, but it won't find it as an exact match.  This will make a
+        set of fake files:
+
+        - starting 1899-12-31 23:55
+        - ending 1900-01-01 01:00
+        - created 1900-01-01 02:00
         """
-        d = abi.base / "abi" / "1900" / "01" / "01" / "00" / "00"
+        d = abi.base / "abi" / "1899" / "12" / "31" / "23" / "55"
         for c in range(1, 17):
             f = (d / f"{c:>01d}" / f"OR_ABI-L1b-RadF-M3C{c:>02d}_G16_"
-                 "s19000010000000_e19000010000000_c19000010000000.nc")
+                 "s18993652355000_e19000010100000_c19000010200000.nc")
             f.parent.mkdir(parents=True)
             f.touch()
 
@@ -175,6 +186,7 @@ class TestABI:
         assert not abi.exists(ts)
         self._mk(abi)
         assert abi.exists(ts)
+        # test that it raises an error if there are two files in the same
         d = abi.base / "abi" / "1900" / "01" / "01" / "00" / "00"
         (d / "3" / "OR_ABI-L1b-RadF-M3C03_G16_"
          "s19000010000000_e19000010000000_c19000010000000.nc").touch()

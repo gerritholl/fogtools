@@ -148,7 +148,6 @@ class FogDB:
         synop = self.ground.load(timestamp)
         lats = synop.index.get_level_values("LATITUDE")
         lons = synop.index.get_level_values("LONGITUDE")
-        fogdata = self.fog.extract(timestamp, lats, lons)
         # FIXME: use concurrent.futures here
         # extract will also call .load thus taking care of dependencies
         satdata = self.sat.extract(timestamp, lats, lons)
@@ -157,6 +156,7 @@ class FogDB:
         cmicdata = self.cmic.extract(timestamp, lats, lons)
         demdata = self.dem.extract(timestamp, lats, lons)
         # FIXME: with concurrent.futures, wait for cmic and dem to be finished
+        fogdata = self.fog.extract(timestamp, lats, lons)
         # FIXME: rename some fields?
         # FIXME: this needs a tolerance on the time, perhaps lat/lon too
         df = pandas.concat([synop, satdata, nwpdata, cmicdata, demdata,
