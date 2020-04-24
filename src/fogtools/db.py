@@ -550,7 +550,7 @@ class _SYNOP(_Ground):
             db = isd.read_db()
             if db.index.names != ["DATE", "LATITUDE", "LONGITUDE"]:
                 db = db.set_index(["DATE", "LATITUDE", "LONGITUDE"])
-            self._db = db
+            self._db = db.sort_index()
         return self._db.loc[timestamp-tol:timestamp+tol]
 
     def store(self, _):
