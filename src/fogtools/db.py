@@ -13,9 +13,12 @@ import logging
 import subprocess
 import tempfile
 import pathlib
+import functools
+import collections
 
 import pandas
 import satpy
+import satpy.readers
 import abc
 
 import sattools.io
@@ -310,29 +313,127 @@ class _ABI(_Sat):
             raise NotImplementedError("Cannot calculate path for ABI before "
                                       "data are available")
 
-    def exists(self, timestamp):
-        """Check if all files at timestamp exist
+    def _search_file_two_dirs(self, ts1, ts2, chan):
+        """Look through two directories for file covering now
+
+        Even when looking for file covering NOW, still need to search in both
+        directory covering now AND in directory covering T-15 minutes
+        """
+        dirs = {
+            abi.get_dl_dir(
+                self.base,
+                ts - pandas.Timedelta(i, "minutes"),
+                chan)
+            for ts in (ts1, ts2)
+            for i in (0, 15)}
+        return collections.ChainMap(*[
+                satpy.readers.find_files_and_readers(
+                    ts1.to_pydatetime().replace(tzinfo=None),
+                    ts2.to_pydatetime().replace(tzinfo=None),
+                    dir,
+                    "abi_l1b",
+                    notfound_ok=True)
+                for dir in dirs])
+
+    def _chan_ts_exists(self, ts, chan):
+        """Check if one file covering timestamp for channel exists
         """
 
+        # ABI full disk files appear either ever 15 minutes (mode M3) or every
+        # 10 minutes (mode M6), but the end time is around 10 minutes after the
+        # start time even in mode M3, with gaps between files.  This means we
+        # don't always find a file covering exactly start_time, but if we don't
+        # we are still interested in the most recent file as long as it covers
+        # T-10 minutes.  If there is a file covering now, we accept it,
+        # otherwise we accept a file covering between T-10 minutes and now.
+        # This will still give a false positive for "exists" if there is a file
+        # at T-10 minutes but none at now, even though there should be one now.
+        #
+        # How to tell the difference between "there is no file, but there
+        # should be" and "there is no file, and we shouldn't expect one"?
+        # Based on mode?  What if mode changes?  For now we accept the false
+        # positives.
+
+        # even when looking for file covering NOW, need to search in directory
+        # including for T-15 minutes, delegate this to _search_file_two_dirs
+        files = self._search_file_two_dirs(ts, ts, chan)
+        cnt1 = files.get("abi_l1b", [])
+        if len(cnt1) == 1:
+            return True
+        elif len(cnt1) > 1:
+            raise FogDBError(f"Channel {chan:d} found multiple times?! "
+                             + ", ".join(str(c) for c in cnt1))
+        # try again with T - 10 minutes
+        start_search = ts - pandas.Timedelta(10, "minutes")
+        files = self._search_file_two_dirs(start_search, ts, chan)
+        if not files:
+            return False
+        cnt2 = files["abi_l1b"]
+        if len(cnt2) == 1:
+            return True
+        elif len(cnt2) < 1:  # not sure if this is possible
+            return False
+        elif len(cnt2) > 1:
+            # if T-0 is not found, T-10 should not be found twice
+            raise FogDBError(f"Channel {chan:d} found multiple times?! "
+                             + ", ".join(str(c) for c in cnt2))
+
+    def exists(self, timestamp, past=False):
+        """Check if files covering  timestamp exist
+
+        Check if ABI files covering 'timestamp' exist for all channels.
+        If ``past`` is True, will also ensure ABI files covering T-60 minutes
+        up to T-0 minutes exist, as SAFNWC software can use this.
+        """
+
+        # So this function either searches for:
+        #   - ``[T-x, T]``
+        #   - ``[T-y, T]``
+        #
+        # Is x always at most 15 minutes?
+        #
+        # Problem with scan modes, such that the end of file x doesn't
+        # correspond to the start of file x+1, there are gaps as it's doing
+        # C, M1, or M2...  need to cover case where the time is not covered.
+        # I actually want to do the opposite.  satpy.find_files_from_readers
+        # will be strict here, but to me it's still a match even if the image
+        # was finished taking 10 seconds ago.
+        #
+        # In M6 NWCSAF searches T-60, T-20, in M3 it searches T-60, T-30.
+        # I'll check that T-60 and T-0 must exist, as well as either T-30 or
+        # T-20.
+
+        ot = functools.partial(pandas.Timedelta, unit="minutes")
         for chan in abi.nwcsaf_abi_channels | abi.fogpy_abi_channels:
-            dl_dir = abi.get_dl_dir(
-                    self.base,
-                    timestamp,
-                    chan)
-            cnt = list(dl_dir.glob(f"*C{chan:>02d}*"))
-            if len(cnt) < 1:
+            if not self._chan_ts_exists(timestamp, chan):
                 return False
-            elif len(cnt) > 1:
-                raise FogDBError(f"Channel {chan:d} found multiple times in "
-                                 f"{dl_dir!s}?! " + ", ".join(
-                                     str(c) for c in cnt))
+            if past and not (
+                    (self._chan_ts_exists(timestamp - ot(60), chan)
+                     and self._chan_ts_exists(timestamp - ot(20), chan)
+                     or self._chan_ts_exists(timestamp - ot(30), chan))):
+                return False
         else:
             return True
         raise RuntimeError("This code is unreachable")  # pragma: no cover
 
     def store(self, timestamp):
         """Store ABI for timestamp
+
+        Store ABI to disk to ensure coverage for timestamp t
         """
+        # FIXME: SAFNWC can use previous and pre-previous files and actually
+        # looks an hour back, so this should probably start at
+        # T-75 minutes to ensure covering at least T-60 minutes!
+        #
+        # This also needs to consider the "impossible" option if the relevant
+        # file doesn't exist at the server, because a certain time is not
+        # covered, either because it's out of range for ABI, or because the
+        # mode asked (F, C, M1, M2) is not available at that time.
+        #
+        # Does the latter actually matter?  Every pixel is anyway measured at a
+        # particular time within [T, T+delta_T], whether the rest of delta_T is
+        # spent on F, C, M1, or M2 doesn't matter, does it?  That means the end
+        # time is not relevant?
         self._generated[timestamp] = abi.download_abi_day(timestamp)
 
     def load(self, timestamp):

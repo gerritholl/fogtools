@@ -161,7 +161,7 @@ class TestABI:
         assert abi.get_path(ts) == [pathlib.Path("/banana")]
 
     @staticmethod
-    def _mk(abi):
+    def _mk(abi, old=False):
         """Make some files in abi.base
 
         This should ensure that abi.exists(...) returns True.
@@ -171,29 +171,40 @@ class TestABI:
         set of fake files:
 
         - starting 1899-12-31 23:55
-        - ending 1900-01-01 01:00
-        - created 1900-01-01 02:00
+        - ending 1900-01-01 00:10
+        - created 1900-01-01 00:20
         """
-        d = abi.base / "abi" / "1899" / "12" / "31" / "23" / "55"
-        for c in range(1, 17):
-            f = (d / f"{c:>01d}" / f"OR_ABI-L1b-RadF-M3C{c:>02d}_G16_"
-                 "s18993652355000_e19000010100000_c19000010200000.nc")
-            f.parent.mkdir(parents=True)
+        import fogtools.abi
+        d = abi.base / "abi" / "1899" / "12" / "31" / "23"
+        for c in (fogtools.abi.nwcsaf_abi_channels
+                  | fogtools.abi.fogpy_abi_channels):
+            f = (d / f"C{c:>01d}" / f"OR_ABI-L1b-RadF-M3C{c:>02d}_G16_"
+                 "s18993652355000_e19000010010000_c19000010020000.nc")
+            f.parent.mkdir(parents=True, exist_ok=True)
             f.touch()
+            if old:
+                # also make T-60, T-30, (last in in M6)
+                (d / f"C{c:>01d}" / f"OR_ABI-L1b-RadF-M3C{c:>02d}_G16_"
+                     "s18993652255000_e18993652310000_"
+                     "c19000010020000.nc").touch()
+                (d / f"C{c:>01d}" / f"OR_ABI-L1b-RadF-M3C{c:>02d}_G16_"
+                     "s18993652325000_e18993652340000_"
+                     "c19000010020000.nc").touch()
 
-    def test_exists(self, abi, ts):
+    def test_exists(self, abi, ts, monkeypatch):
         import fogtools.db
+        import fogtools.abi
+        # this monkeypatching is just to make the tests run faster
+        monkeypatch.setattr(fogtools.abi, "nwcsaf_abi_channels", {3})
+        monkeypatch.setattr(fogtools.abi, "fogpy_abi_channels", {3})
         assert not abi.exists(ts)
-        self._mk(abi)
+        self._mk(abi, old=False)
         assert abi.exists(ts)
-        # test that it raises an error if there are two files in the same
-        d = abi.base / "abi" / "1900" / "01" / "01" / "00" / "00"
-        (d / "3" / "OR_ABI-L1b-RadF-M3C03_G16_"
-         "s19000010000000_e19000010000000_c19000010000000.nc").touch()
-        (d / "3" / "OR_ABI-L1b-RadF-M3C03_G16_"
-         "s19000010000000_e19000010000000_c19000010000000b.nc").touch()
-        with pytest.raises(fogtools.db.FogDBError):
-            abi.exists(ts)
+        assert abi.exists(ts + pandas.Timedelta(12, "minutes"))
+        assert not abi.exists(ts, past=True)
+        assert not abi.exists(ts + pandas.Timedelta(2, "hours"))
+        self._mk(abi, old=True)
+        assert abi.exists(ts, past=True)
 
     @unittest.mock.patch("fogtools.abi.download_abi_day", autospec=True)
     def test_store(self, fad, abi, ts):
@@ -409,6 +420,7 @@ class TestSYNOP:
     def test_load(self, fic, fir, synop, ts, fake_df, tmp_path, monkeypatch):
         monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
         fir.return_value = fake_df
+
         def fake_store(*args):
             (tmp_path / "fogtools").mkdir(parents=True, exist_ok=False)
             fake_df.to_parquet(tmp_path / "fogtools" / "store.parquet")

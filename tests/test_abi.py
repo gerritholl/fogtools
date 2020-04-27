@@ -37,10 +37,10 @@ def test_get_dl_dest():
     b = pathlib.Path("/tmp")
     t = pandas.Timestamp("2020-03-01T12")
     assert get_dl_dest(b, t, 42, "lettuce") == \
-        pathlib.Path("/tmp/abi/2020/03/01/12/00/42/lettuce")
+        pathlib.Path("/tmp/abi/2020/03/01/12/C42/lettuce")
     t = pandas.Timestamp("2020-03-01T12:30")
     assert get_dl_dest(b, t, 42, "a/b/lettuce.nuts") == \
-        pathlib.Path("/tmp/abi/2020/03/01/12/30/42/lettuce.nuts")
+        pathlib.Path("/tmp/abi/2020/03/01/12/C42/lettuce.nuts")
 
 
 @patch("s3fs.S3FileSystem", autospec=True)
@@ -70,17 +70,17 @@ def test_download_abi(sS, tmp_path):
         assert sS.return_value.get.call_count == 24 * 3 * 4
         sS.return_value.get.assert_has_calls([
             call("s3://" + ref[0],
-                 tmp_path / "abi" / "2017" / "02" / "28" / "00" / "02" /
-                 "1" / ref[0].split("/")[-1]),
+                 tmp_path / "abi" / "2017" / "02" / "28" / "00" /
+                 "C1" / ref[0].split("/")[-1]),
             call("s3://" + ref[1],
-                 tmp_path / "abi" / "2017" / "02" / "28" / "01" / "22" /
-                 "2" / ref[1].split("/")[-1]),
+                 tmp_path / "abi" / "2017" / "02" / "28" / "01" /
+                 "C2" / ref[1].split("/")[-1]),
             call("s3://" + ref[2],
-                 tmp_path / "abi" / "2017" / "02" / "28" / "06" / "27" /
-                 "3" / ref[2].split("/")[-1]),
+                 tmp_path / "abi" / "2017" / "02" / "28" / "06" /
+                 "C3" / ref[2].split("/")[-1]),
             call("s3://" + ref[3],
-                 tmp_path / "abi" / "2017" / "02" / "28" / "17" / "51" /
-                 "1" / ref[3].split("/")[-1])],
+                 tmp_path / "abi" / "2017" / "02" / "28" / "17" /
+                 "C1" / ref[3].split("/")[-1])],
             any_order=True)
     with tempfile.NamedTemporaryFile() as ntf, \
             patch("fogtools.abi.get_dl_dest", autospec=True) as fag:

@@ -75,7 +75,7 @@ def get_dl_dir(cd, t, chan):
     Returns:
         pathlib.Path object pointing to directory that should contain files
     """
-    dd = cd / "abi" / t.strftime("%Y/%m/%d/%H/%M") / f"{chan:>01d}"
+    dd = cd / "abi" / t.strftime("%Y/%m/%d/%H") / f"C{chan:>01d}"
     return dd
 
 
