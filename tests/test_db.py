@@ -161,7 +161,7 @@ class TestABI:
         assert abi.get_path(ts) == [pathlib.Path("/banana")]
 
     @staticmethod
-    def _mk(abi, old=False):
+    def _mk(abi, old=False, bad=False):
         """Make some files in abi.base
 
         This should ensure that abi.exists(...) returns True.
@@ -182,6 +182,10 @@ class TestABI:
                  "s18993652355000_e19000010010000_c19000010020000.nc")
             f.parent.mkdir(parents=True, exist_ok=True)
             f.touch()
+            if bad:
+                (d / f"C{c:>01d}" / f"OR_ABI-L1b-RadF-M6C{c:>02d}_G16_"
+                 "s18993652355000_e19000010010000_"
+                 "c19000010020000.nc").touch()
             if old:
                 # also make T-60, T-30, (last in in M6)
                 (d / f"C{c:>01d}" / f"OR_ABI-L1b-RadF-M3C{c:>02d}_G16_"
@@ -205,6 +209,11 @@ class TestABI:
         assert not abi.exists(ts + pandas.Timedelta(2, "hours"))
         self._mk(abi, old=True)
         assert abi.exists(ts, past=True)
+        self._mk(abi, bad=True)
+        with pytest.raises(fogtools.db.FogDBError):
+            abi.exists(ts + pandas.Timedelta(12, "minutes"))
+        with pytest.raises(fogtools.db.FogDBError):
+            abi.exists(ts)
 
     @unittest.mock.patch("fogtools.abi.download_abi_day", autospec=True)
     def test_store(self, fad, abi, ts):

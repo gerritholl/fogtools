@@ -372,7 +372,9 @@ class _ABI(_Sat):
         if len(cnt2) == 1:
             return True
         elif len(cnt2) < 1:  # not sure if this is possible
-            return False
+            raise RuntimeError("Got empty file list from satpys "
+                    "find_files_and_readers.  "
+                    "This cannot happen.")  # pragma: no cover
         elif len(cnt2) > 1:
             # if T-0 is not found, T-10 should not be found twice
             raise FogDBError(f"Channel {chan:d} found multiple times?! "
