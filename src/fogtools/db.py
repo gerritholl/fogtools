@@ -162,6 +162,7 @@ class FogDB:
         fogdata = self.fog.extract(timestamp, lats, lons)
         # FIXME: rename some fields?
         # FIXME: this needs a tolerance on the time, perhaps lat/lon too
+        logger.info("Collected all fogdb components, putting it all together")
         df = pandas.concat([synop, satdata, nwpdata, cmicdata, demdata,
                             fogdata], axis=1)
         if self.data is None:
@@ -174,7 +175,7 @@ class FogDB:
         """
         if self.data is None:
             raise ValueError("No entries in database!")
-        logger.info(f"Storing database to {f!s}")
+        logger.info(f"Storing fog database to {f!s}")
         self.data.to_parquet(f)
 
 
@@ -206,8 +207,13 @@ class _DB(abc.ABC):
     def reader(self):
         raise NotImplementedError()  # pragma: no cover
 
+    @property
+    @abc.abstractmethod
+    def name(self):
+        raise NotImplementedError()  # pragma: no cover
+
     def __init__(self, dependencies=None):
-        logger.debug(f"Initialising {self.__class__!s}")
+        logger.debug(f"Initialising {self!s}")
         self.dependencies = dependencies if dependencies else {}
         self.base = sattools.io.get_cache_dir(subdir="fogtools") / "fogdb"
         self._data = {}
@@ -231,6 +237,9 @@ class _DB(abc.ABC):
 
     def ensure(self, timestamp):
         if not self.exists(timestamp):
+            logger.debug("Input data unavailable or incomplete for "
+                         f"{self!s} for {timestamp:%Y-%m-%d %H:%M}, "
+                         "downloading")
             self.store(timestamp)
 
     def ensure_deps(self, timestamp):
@@ -240,7 +249,7 @@ class _DB(abc.ABC):
             self.link(dep, timestamp)
 
     def load(self, timestamp):
-        logger.debug(f"Loading with {self.__class__!s}")
+        logger.debug(f"Loading {self!s}")
         sc = satpy.Scene(
                 filenames=self.get_path(timestamp),
                 reader=self.reader)
@@ -285,7 +294,8 @@ class _DB(abc.ABC):
             pandas.DataFrame with the desired data
         """
         sc = self.load(timestamp)
-        logger.debug(f"Extracting lat/lons for {self.__class__!s}")
+        logger.debug(f"Extracting data for {self!s} "
+                     f"{timestamp:%Y-%m-%d %H:%M}")
         vals = {}
         for da in sc:
             (x, y) = da.attrs["area"].get_xy_from_lonlat(lons, lats)
@@ -296,6 +306,9 @@ class _DB(abc.ABC):
                     [pandas.Series(timestamp).repeat(lats.size), lats, lons],
                     names=["DATE", "LATITUDE", "LONGITUDE"]))
 
+    def __str__(self):
+        return f"[fogdb component {self.name:s}]"
+
 
 class _Sat(_DB):
     """Placeholder class in case further satellites are added.
@@ -305,6 +318,7 @@ class _Sat(_DB):
 
 class _ABI(_Sat):
     reader = "abi_l1b"
+    name = "ABI"
 
     def get_path(self, timestamp):
         if timestamp in self._generated:
@@ -332,7 +346,7 @@ class _ABI(_Sat):
                     ts2.to_pydatetime().replace(tzinfo=None),
                     dir,
                     "abi_l1b",
-                    notfound_ok=True)
+                    missing_ok=True)
                 for dir in dirs])
 
     def _chan_ts_exists(self, ts, chan):
@@ -372,7 +386,8 @@ class _ABI(_Sat):
         if len(cnt2) == 1:
             return True
         elif len(cnt2) < 1:  # not sure if this is possible
-            raise RuntimeError("Got empty file list from satpys "
+            raise RuntimeError(
+                    "Got empty file list from satpys "
                     "find_files_and_readers.  "
                     "This cannot happen.")  # pragma: no cover
         elif len(cnt2) > 1:
@@ -406,13 +421,21 @@ class _ABI(_Sat):
         # T-20.
 
         ot = functools.partial(pandas.Timedelta, unit="minutes")
+        logger.debug("Checking all required ABI channels at "
+                     f"{timestamp:%Y-%m-%d %H:%M}")
         for chan in abi.nwcsaf_abi_channels | abi.fogpy_abi_channels:
+            logger.debug(f"Checking channel {chan:d}")
             if not self._chan_ts_exists(timestamp, chan):
+                logger.debug(f"Channel {chan:d} missing at "
+                             f"{timestamp:%Y-%m-%d %H:%M}")
                 return False
             if past and not (
                     (self._chan_ts_exists(timestamp - ot(60), chan)
                      and self._chan_ts_exists(timestamp - ot(20), chan)
                      or self._chan_ts_exists(timestamp - ot(30), chan))):
+                logger.debug(f"Channel {chan:d} available at "
+                             f"{timestamp:%Y-%m-%d %H:%M}, but missing "
+                             "one or more previous data files")
                 return False
         else:
             return True
@@ -423,10 +446,6 @@ class _ABI(_Sat):
 
         Store ABI to disk to ensure coverage for timestamp t
         """
-        # FIXME: SAFNWC can use previous and pre-previous files and actually
-        # looks an hour back, so this should probably start at
-        # T-75 minutes to ensure covering at least T-60 minutes!
-        #
         # This also needs to consider the "impossible" option if the relevant
         # file doesn't exist at the server, because a certain time is not
         # covered, either because it's out of range for ABI, or because the
@@ -436,7 +455,10 @@ class _ABI(_Sat):
         # particular time within [T, T+delta_T], whether the rest of delta_T is
         # spent on F, C, M1, or M2 doesn't matter, does it?  That means the end
         # time is not relevant?
-        self._generated[timestamp] = abi.download_abi_day(timestamp)
+        self._generated[timestamp] = abi.download_abi_period(
+                timestamp-pandas.Timedelta(65, "minutes"),
+                timestamp+pandas.Timedelta(5, "minutes"),
+                tps="F")
 
     def load(self, timestamp):
         """Get scene containing relevant ABI channels
@@ -454,7 +476,7 @@ class _ABI(_Sat):
         # contain a single digit for deciseconds (see PUG L1B, Volume 3, page
         # 291, # PDF page 326).  This doesn't affect strptime which is
         # apparently what Satpy uses.
-        logger.debug("Loading ABI")
+        logger.debug("Loading ABI from local disk")
         selection = [p for p in files if p.match(
             f"*_s{timestamp:%Y%j%H%M%S}*.nc")]
         sc = satpy.Scene(
@@ -471,6 +493,7 @@ class _NWP(_DB):
 
 class _ICON(_NWP):
     reader = "grib"
+    name = "ICON"
 
     def get_path(self, timestamp):
         rb = sky.RequestBuilder(self.base)
@@ -487,6 +510,7 @@ class _ICON(_NWP):
         This will come from ICON.
         """
 
+        logger.info("Retrieving ICON from SKY for {timestamp:%Y-%m-%d %H:%M}")
         period = sky.timestamp2period(timestamp)
         self._generated[timestamp] = sky.get_and_send(self.base, period)
 
@@ -497,6 +521,7 @@ class _CMIC(_DB):
 
 class _NWCSAF(_CMIC):
     reader = "nwcsaf-geo"
+    name = "NWCSAF-GEO"
 
     def get_path(self, timestamp):
         return [(self.base /
@@ -566,7 +591,7 @@ class _NWCSAF(_CMIC):
         Returns:
             CalledProcess
         """
-        logger.debug("Starting NWCSAF software")
+        logger.info("Starting NWCSAF software")
         return subprocess.run(["SAFNWCTM"], check=True)
 
     @staticmethod
@@ -625,6 +650,7 @@ class _Ground(_DB):
 
 class _SYNOP(_Ground):
     reader = None  # cannot be read with Satpy
+    name = "SYNOP/ISD"
 
     def get_path(self, timestamp):
         return [isd.get_db_location()]
@@ -649,7 +675,8 @@ class _SYNOP(_Ground):
         """
         self.ensure(timestamp)
         if self._db is None:
-            logger.debug("Reading ground measurements database from ISD")
+            logger.debug("Reading ground measurements database from locally "
+                         "stored selection of ISD")
             db = isd.read_db()
             if db.index.names != ["DATE", "LATITUDE", "LONGITUDE"]:
                 db = db.set_index(["DATE", "LATITUDE", "LONGITUDE"])
@@ -662,6 +689,7 @@ class _SYNOP(_Ground):
 
 class _DEM(_DB):
     reader = "generic_image"
+    name = "DEM"
 
     dem_new_england = pathlib.Path("/media/nas/x21308/DEM/USGS/merged-500.tif")
     dem_europe = pathlib.Path("/media/nas/x21308/DEM/dem_eu_1km.tif")
@@ -702,6 +730,7 @@ class _DEM(_DB):
 
 class _Fog(_DB):
     reader = "generic_image"  # stored as geotiff
+    name = "Fogpy"
 
     def get_path(self, timestamp, sensorreader="nwcsaf-geo"):
         return [self.base / f"fog-{timestamp:%Y%m%d-%H%M}.tif"]

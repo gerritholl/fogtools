@@ -116,6 +116,8 @@ def test_init(db):
 
 
 def test_extend(db, fake_df, ts, caplog):
+    # TODO: rewrite test with less mocking
+    #
     # function is probably mocking too much, the test passes but it fails in
     # the real world because the preconditions before calling .extract are not
     # met
@@ -135,6 +137,8 @@ def test_extend(db, fake_df, ts, caplog):
     with caplog.at_level(logging.INFO):
         db.extend(ts)
         assert "Loading data for 1900-01-01 00:00:00" in caplog.text
+        # assert "Extracting data for [fogdb component ABI]
+        # 1900-01-01 00:00:00" in caplog.text
     assert sorted(db.data.columns) == [
             "apricot", "aubergine", "banana", "damson", "peach", "pineapple",
             "prune", "raspberry", "redcurrant", "shallot", "values"]
@@ -215,13 +219,13 @@ class TestABI:
         with pytest.raises(fogtools.db.FogDBError):
             abi.exists(ts)
 
-    @unittest.mock.patch("fogtools.abi.download_abi_day", autospec=True)
+    @unittest.mock.patch("fogtools.abi.download_abi_period", autospec=True)
     def test_store(self, fad, abi, ts):
         fad.return_value = [pathlib.Path("/pineapple")]
         abi.store(ts)
         assert abi._generated[ts] == [pathlib.Path("/pineapple")]
 
-    @unittest.mock.patch("fogtools.abi.download_abi_day", autospec=True)
+    @unittest.mock.patch("fogtools.abi.download_abi_period", autospec=True)
     @unittest.mock.patch("satpy.Scene", autospec=True)
     def test_load(self, sS, fad, abi, ts, tmp_path):
         fad.return_value = [
@@ -242,14 +246,17 @@ class TestABI:
 
     # test concrete methods defined in base class here, as far as not
     # overwritten by _ABI or trivial (such as ensure_deps)
-    @unittest.mock.patch("fogtools.abi.download_abi_day", autospec=True)
+    @unittest.mock.patch("fogtools.abi.download_abi_period", autospec=True)
     def test_ensure(self, fad, abi, ts):
         abi.ensure(ts)
-        fad.assert_called_once_with(ts)
+        fad.assert_called_once_with(
+                ts - pandas.Timedelta(65, "minutes"),
+                ts + pandas.Timedelta(5, "minutes"),
+                tps="F")
         self._mk(abi)
         abi.ensure(ts)
         # make sure it wasn't called again
-        fad.assert_called_once_with(ts)
+        fad.assert_called_once()
 
     def test_link(self, abi, ts):
         abi.link(None, None)  # this doesn't do anything
@@ -271,6 +278,9 @@ class TestABI:
                 df.index.get_level_values("LONGITUDE"), [10, 15])
         numpy.testing.assert_array_equal(
                 df.index.get_level_values("DATE"), [ts, ts])
+
+    def test_str(self, abi):
+        assert str(abi) == "[fogdb component ABI]"
 
 
 class TestICON:
