@@ -40,3 +40,9 @@ def xrda():
             dims=("bands", "y", "x"),
             coords={"bands": ["R", "G", "B", "A"]})
     return (overview, fls_day)
+
+
+@pytest.fixture(autouse=True)
+def tmpenv(monkeypatch, tmp_path):
+    monkeypatch.setenv("SAFNWC", str(tmp_path))
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
