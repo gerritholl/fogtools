@@ -44,7 +44,8 @@ def get_fog_blend_for_sat(sensor_reader, sensor_files,
         sensor_reader (str): For which sensor/reader to derive the fog product.
             Must be a sensor/reader supported by fogpy.  Currently those are
             "seviri_l1b_hrit" or "abi_l1b".
-        sensor_files (List[str]): List of filenames corresponding to satellite data.
+        sensor_files (List[str]): List of filenames corresponding to satellite
+            data.
         cloud_reader (str): Reader providing the cloud products.  Can be
             "nwcsaf-geo" or "cmsaf-claas2_l2_nc".
         cloud_files (List[str]): List of filenames corresponding to cloud

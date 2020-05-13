@@ -12,7 +12,8 @@ def test_get_parser(ap):
     fogtools.processing.show_fog.get_parser()
     assert ap.return_value.add_argument.call_count == 4
     assert ap.return_value.add_mutually_exclusive_group.call_count == 2
-    assert ap.return_value.add_mutually_exclusive_group.return_value.add_argument.call_count == 4
+    assert ap.return_value.add_mutually_exclusive_group.return_value.\
+        add_argument.call_count == 4
 
 
 @patch("fogtools.processing.show_fog.parse_cmdline", autospec=True)
