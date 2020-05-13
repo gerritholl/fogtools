@@ -24,6 +24,7 @@ def test_get_fog_blend_for_sat(fvb, sS, fcS, xrda):
     rv = get_fog_blend_for_sat(
             "seviri_l1b_hrit",
             ["a", "b", "c"],
+            "nwcsaf-geo",
             ["d", "e", "f"],
             "germ",
             "overview")

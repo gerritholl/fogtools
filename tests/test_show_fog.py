@@ -10,7 +10,9 @@ import xarray
 def test_get_parser(ap):
     import fogtools.processing.show_fog
     fogtools.processing.show_fog.get_parser()
-    assert ap.return_value.add_argument.call_count == 7
+    assert ap.return_value.add_argument.call_count == 4
+    assert ap.return_value.add_mutually_exclusive_group.call_count == 2
+    assert ap.return_value.add_mutually_exclusive_group.return_value.add_argument.call_count == 4
 
 
 @patch("fogtools.processing.show_fog.parse_cmdline", autospec=True)
@@ -21,10 +23,9 @@ def test_main(fcS, fvg, fpsp, tmp_path, xrda):
     from satpy import Scene, DatasetID
     fpsp.return_value = fogtools.processing.show_fog.get_parser().parse_args(
             ["/no/out/file",
-             "--sat", "/no/sat/files",
+             "--seviri", "/no/sat/files",
              "--nwcsaf", "/no/nwcsaf/files",
-             "-a", "fribbulus xax",
-             "-m", "seviri_l1b_hrit"])
+             "-a", "fribbulus xax"])
     m_im = MagicMock()
     m_sc = MagicMock()
     f_sc = Scene()
@@ -39,6 +40,7 @@ def test_main(fcS, fvg, fpsp, tmp_path, xrda):
     fvg.assert_called_once_with(
             "seviri_l1b_hrit",
             ["/no/sat/files"],
+            "nwcsaf-geo",
             ["/no/nwcsaf/files"],
             "fribbulus xax",
             "overview")
@@ -47,10 +49,9 @@ def test_main(fcS, fvg, fpsp, tmp_path, xrda):
     fvg.return_value[0].reset_mock()
     fpsp.return_value = fogtools.processing.show_fog.get_parser().parse_args(
             [str(tmp_path),
-             "--sat", "/no/sat/files",
-             "--nwcsaf", "/no/nwcsaf/files",
+             "--abi", "/no/sat/files",
+             "--cmsaf", "/no/nwcsaf/files",
              "-a", "fribbulus xax",
-             "-m", "seviri_l1b_hrit",
              "-i"])
     fogtools.processing.show_fog.main()
     fvg.return_value[0].save.assert_called_once_with(
@@ -64,10 +65,9 @@ def test_main(fcS, fvg, fpsp, tmp_path, xrda):
     fcS.return_value.save_datasets.reset_mock()
     fpsp.return_value = fogtools.processing.show_fog.get_parser().parse_args(
             [str(tmp_path),
-             "--sat", "/no/sat/files",
+             "--seviri", "/no/sat/files",
              "--nwcsaf", "/no/nwcsaf/files",
              "-a", "fribbulus xax",
-             "-m", "seviri_l1b_hrit",
              "-d"])
 
     fogtools.processing.show_fog.main()
