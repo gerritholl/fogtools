@@ -1,6 +1,14 @@
-"""Display fog image for scene
+"""Display fog image for scene.
 
-Given NWCSAF and SEVIRI files, write file with fog image
+Given satellite imagery files and cloud microphysics files, use fogpy to
+generate a blended image of detected fog.  Satellite imagery can come from
+either SEVIRI or ABI.  Cloud microphysics may come from NWCSAF or CMSAF.
+For example:
+
+    show-fog $(plotdir)/out.tif
+            --seviri /path/to/seviri/files/*
+            --nwcsaf /path/to/cmsaf/files/*
+            -a germ
 """
 
 import xarray
@@ -16,16 +24,6 @@ def get_parser():
             formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
     parser.add_argument(
-            "--sat", action="store", type=pathlib.Path,
-            nargs="+", required=True,
-            help="List of satellite files")
-
-    parser.add_argument(
-            "--nwcsaf", action="store", type=pathlib.Path,
-            required=True, nargs="+",
-            help="List of NWCSAF files")
-
-    parser.add_argument(
             "out",
             action="store", type=pathlib.Path,
             help="Where to store output.  If storing a single file, this "
@@ -35,6 +33,26 @@ def get_parser():
                  "files happens when passing -i or -d.  In this case, each "
                  "dataset will be stored as `dataset.tif` within the output "
                  "directory.")
+
+    sat = parser.add_mutually_exclusive_group(required=True)
+    sat.add_argument(
+            "--seviri", action="store", type=pathlib.Path,
+            nargs="+",
+            help="List of SEVIRI HRIT files")
+    sat.add_argument(
+            "--abi", action="store", type=pathlib.Path,
+            nargs="+",
+            help="List of ABI L1B NetCDF files")
+
+    cloud = parser.add_mutually_exclusive_group(required=True)
+    cloud.add_argument(
+            "--nwcsaf", action="store", type=pathlib.Path,
+            nargs="+",
+            help="List of NWCSAF CMIC files")
+    cloud.add_argument(
+            "--cmsaf", action="store", type=pathlib.Path,
+            nargs="+",
+            help="List of CMSAF CLAAS-2 CPP files")
 
     parser.add_argument(
             "-a", "--area", action="store", type=str,
@@ -52,11 +70,6 @@ def get_parser():
             help="Also write all dependencies, that means all products used "
                  "directly by fogpy to generate the fog products")
 
-    parser.add_argument(
-            "-m", "--mode", type=str, action="store",
-            default="seviri_l1b_hrit", choices=["abi_l1b", "seviri_l1b_hrit"],
-            help="Which satellite to use")
-
     return parser
 
 
@@ -69,9 +82,10 @@ def main():
     debug_on()
     p = parse_cmdline()
     (im, sc) = vis.get_fog_blend_for_sat(
-            p.mode,
-            [str(f) for f in p.sat],
-            [str(f) for f in p.nwcsaf],
+            "seviri_l1b_hrit" if p.seviri else "abi_l1b",
+            [str(x) for x in (p.seviri or p.abi)],
+            "nwcsaf-geo" if p.nwcsaf else "cmsaf-claas2_l2_nc",
+            [str(x) for x in (p.nwcsaf or p.cmsaf)],
             p.area,
             "overview")
     if p.store_intermediates or p.store_dependencies:
