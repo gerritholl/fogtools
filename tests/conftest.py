@@ -25,7 +25,7 @@ csv_db_test_content = """,STATION,DATE,LATITUDE,LONGITUDE,ELEVATION,NAME,vis,tem
 
 
 @pytest.fixture
-def db():
+def gb_db():
     with io.StringIO(csv_db_test_content) as f:
         return pandas.read_csv(f, parse_dates=["DATE"])
 

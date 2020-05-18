@@ -24,7 +24,7 @@ def db():
 
 @pytest.fixture
 def ts():
-    return pandas.Timestamp("1900-01-01T00:00:00Z")
+    return pandas.Timestamp("1900-01-01T00:00:00")
 
 
 def _dbprep(tmp_path, cls, *args, **kwargs):
@@ -62,7 +62,7 @@ def fake_df():
     df = pandas.DataFrame(
             {"DATE": (dr:=pandas.date_range(  # noqa: E231
                 "18991231T12", "19000101T12",
-                freq="15min", tz="UTC")),
+                freq="15min")),
              "LATITUDE": numpy.linspace(-89, 89, dr.size),
              "LONGITUDE": numpy.linspace(-179, 179, dr.size),
              "values": numpy.empty(shape=dr.size)}).sample(
@@ -121,14 +121,16 @@ def test_extend(db, fake_df, ts, caplog):
     # function is probably mocking too much, the test passes but it fails in
     # the real world because the preconditions before calling .extract are not
     # met
+    import fogtools.isd
     db.sat = unittest.mock.MagicMock()
     db.nwp = unittest.mock.MagicMock()
     db.cmic = unittest.mock.MagicMock()
     db.dem = unittest.mock.MagicMock()
     db.fog = unittest.mock.MagicMock()
-    with unittest.mock.patch("fogtools.isd.read_db", autospec=True) as fir:
-        fir.return_value = fake_df
-        gd = db.ground.load(ts)
+    loc = fogtools.isd.get_db_location()
+    loc.parent.mkdir(parents=True)
+    fake_df.to_parquet(fogtools.isd.get_db_location())
+    gd = db.ground.load(ts)
     db.sat.extract.return_value = _mkdf(gd.index, "raspberry", "banana")
     db.nwp.extract.return_value = _mkdf(gd.index, "apricot", "pineapple")
     db.cmic.extract.return_value = _mkdf(gd.index, "peach", "redcurrant")
@@ -277,7 +279,8 @@ class TestABI:
         numpy.testing.assert_array_equal(
                 df.index.get_level_values("LONGITUDE"), [10, 15])
         numpy.testing.assert_array_equal(
-                df.index.get_level_values("DATE"), [ts, ts])
+                df.index.get_level_values("DATE"),
+                pandas.DatetimeIndex([ts, ts]))
 
     def test_str(self, abi):
         assert str(abi) == "[fogdb component ABI]"
@@ -448,9 +451,9 @@ class TestSYNOP:
         fic.assert_called_once_with()
         assert sel.shape == (5, 1)
         assert sel.index.get_level_values("DATE")[0] == pandas.Timestamp(
-                "18991231T2330Z")
+                "18991231T2330")
         assert sel.index.get_level_values("DATE")[-1] == pandas.Timestamp(
-                "19000101T0030Z")
+                "19000101T0030")
         assert sel.index.names == ["DATE", "LATITUDE", "LONGITUDE"]
         sel2 = synop.load(ts, tol=pandas.Timedelta("31min"))
         assert sel.equals(sel2)
