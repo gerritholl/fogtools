@@ -7,6 +7,7 @@
     https://pytest.org/latest/plugins.html
 """
 
+import os
 import io
 
 import pytest
@@ -46,3 +47,8 @@ def xrda():
 def tmpenv(monkeypatch, tmp_path):
     monkeypatch.setenv("SAFNWC", str(tmp_path))
     monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
+
+
+@pytest.fixture(scope="session", autouse=True)
+def setUp(tmp_path_factory):
+    os.environ["XDG_CACHE_HOME"] = str(tmp_path_factory.mktemp("scratch"))
