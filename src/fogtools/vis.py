@@ -24,7 +24,7 @@ def blend_fog(sc, other="overview"):
             (1.0, (250 / 255, 200 / 255, 40 / 255)))
     ov = satpy.writers.get_enhanced_image(sc[other]).convert("RGBA")
     A = sc["fls_day"].sel(bands="A")
-    Ap = (1-A).where(1-A == 0, 0.5)
+    Ap = A.where(A == 0, 0.5)
     im = trollimage.xrimage.XRImage(Ap)
     im.stretch()
     im.colorize(fogcol)
