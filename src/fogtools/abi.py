@@ -118,23 +118,6 @@ def _get_chan_from_name(nm):
     return int(nm.split("/")[-1][19:21])
 
 
-def download_abi_day(dt, chans=fogpy_abi_channels | nwcsaf_abi_channels,
-                     tps="C"):
-    """Download ABI for day
-
-    Args:
-        dt (Timestamp)
-            Date for which to download
-
-    Returns:
-        List[pathlib.Path]
-            Files downloaded or already present
-    """
-
-    return download_abi_period(
-            dt.floor("D"), dt.ceil("D"), chans, tps=tps)
-
-
 def download_abi_period(
         start, end, chans=fogpy_abi_channels | nwcsaf_abi_channels, tps="C"):
     """Download ABI for period if not already present
