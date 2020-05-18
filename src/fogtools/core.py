@@ -8,8 +8,8 @@ import sattools.ptc
 
 
 def get_fog(sensor_reader, sensor_files,
-                          cloud_reader, cloud_files,
-                          area, blend_background):
+            cloud_reader, cloud_files,
+            area, blend_background):
     """Get daytime fog blend for sensor
 
     Get daytime fog.

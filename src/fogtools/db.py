@@ -729,6 +729,11 @@ class _DEM(_DB):
 
 
 class _Fog(_DB):
+    """Gather fog outputs
+
+    So far only for ABI / NWCSAF-GEO
+    """
+
     reader = "generic_image"  # stored as geotiff
     name = "Fogpy"
 
@@ -740,8 +745,10 @@ class _Fog(_DB):
         sc = core.get_fog(
                 "abi_l1b",
                 self.dependencies["sat"].get_path(timestamp),
+                "nwcsaf-geo",
                 self.dependencies["cmic"].get_path(timestamp),
-                "new-england-500")
+                "new-england-500",
+                "overview")
         sc.save_dataset("fls_day", self.get_path(timestamp)[0])
 
 

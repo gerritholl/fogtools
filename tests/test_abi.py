@@ -46,8 +46,8 @@ def test_s3_select_period(sS, listing):
     sS.return_value.glob.return_value = listing
     g1 = s3_select_period(t1, t2, [10], "C")
     g2 = s3_select_period(t1, t2, [10], "F")
-    assert list(g1) == listing
-    assert list(g2) == listing
+    assert set(g1) == set(listing)
+    assert set(g2) == set(listing)
     sS.return_value.glob.assert_any_call(
         "s3://noaa-goes16/ABI-L1b-RadC/2020/060/12/"
         "??_???-L1b-???*-??C10_???_s?????????????*_"
