@@ -119,12 +119,13 @@ def _get_chan_from_name(nm):
 
 
 def download_abi_period(
-        start, end, chans=fogpy_abi_channels | nwcsaf_abi_channels, tps="C"):
+        start, end, chans=fogpy_abi_channels | nwcsaf_abi_channels, tps="C",
+        basedir=None):
     """Download ABI for period if not already present
 
     Consider the period between start and end, and download any ABI data not
     already present in local cache.  Data will be downloaded to
-    ``sattools.get_cache_dir() / fogtools``.
+    ``sattools.get_cache_dir() / fogtools`` if basedir not given.
 
     Args:
         start (Timestamp)
@@ -135,6 +136,9 @@ def download_abi_period(
             List of channels, defaults to those needed for NWCSAf and Fogpy
         tps (array_like, optional)
             String of types, defaults to "C" for "CONUS", can be "F" or "FC"
+        basedir (str or path, optional)
+            Root directory to which it will be downloaded, defaults to
+            ``sattools.get_cache_dir() / "fogtools"``.
 
     Returns:
         List[pathlib.Path]
@@ -142,7 +146,7 @@ def download_abi_period(
     """
 
     fs = s3fs.S3FileSystem(anon=True)
-    cd = stio.get_cache_dir(subdir="fogtools")
+    cd = basedir or stio.get_cache_dir(subdir="fogtools")
     L = []
     logger.info(f"Downloading ABI for {start:%Y-%m-%d %H:%M} -- "
                 f"{end:%Y-%m-%d %H:%M}")

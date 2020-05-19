@@ -458,7 +458,8 @@ class _ABI(_Sat):
         self._generated[timestamp] = abi.download_abi_period(
                 timestamp-pandas.Timedelta(65, "minutes"),
                 timestamp+pandas.Timedelta(5, "minutes"),
-                tps="F")
+                tps="F",
+                basedir=self.base)
 
     def load(self, timestamp):
         """Get scene containing relevant ABI channels

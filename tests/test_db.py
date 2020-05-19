@@ -3,6 +3,7 @@ import functools
 import subprocess
 import unittest.mock
 import logging
+import fnmatch
 
 import numpy.testing
 import pandas
@@ -110,6 +111,38 @@ def fog(tmp_path, dem, nwcsaf, abi):
                    dependencies={"sat": abi, "dem": dem, "cmic": nwcsaf})
 
 
+def _gen_abi_list(
+        cs, st, ed, freq, pat,
+        dt_end=pandas.Timedelta(10, "min"),
+        dt_cre=pandas.Timedelta(20, "min")):
+    """Generate fake src list for ABI."""
+    L = []
+    for c in cs:
+        for d in pandas.date_range(st, ed, freq=freq):
+            L.append(pat.format(
+                c=c, start_time=d, end_time=d+dt_end, cre_time=d+dt_cre))
+    return L
+
+
+def _gen_abi_src(cs, st, ed):
+    """Generate fake src list for ABI."""
+    return _gen_abi_list(
+            cs=cs, st=st, ed=ed, freq="15min",
+            pat=("s3://noaa-goes16/ABI-L1b-RadF/{start_time:%Y}/"
+                 "{start_time:%j}/{start_time:%H}/"
+                 "OR_ABI-L1b-RadF-M3C{c:>02d}_G16_s{start_time:%Y%j%H%M%S0}"
+                 "_e{end_time:%Y%j%H%M%S0}_c{cre_time:%Y%j%H%M%S0}.nc"))
+
+
+def _gen_abi_dst(abi, cs, st, ed):
+    """Generate fake dest list for ABI."""
+    pat = str(abi.base / "abi" / "{start_time:%Y}" / "{start_time:%m}" /
+              "{start_time:%d}" / "{start_time:%H}" / "C{c:>01d}" /
+              "OR_ABI-L1b-RadF-M3C{c:>02d}_G16_s{start_time:%Y%j%H%M%S0}"
+              "_e{end_time:%Y%j%H%M%S0}_c{cre_time:%Y%j%H%M%S0}.nc")
+    return _gen_abi_list(cs=cs, st=st, ed=ed, freq="15min", pat=pat)
+
+
 def test_init(db):
     assert db.sat is not None
     assert db.fog is not None
@@ -167,7 +200,28 @@ class TestABI:
         assert abi.get_path(ts) == [pathlib.Path("/banana")]
 
     @staticmethod
-    def _mk(abi, old=False, bad=False):
+    def _get_fake_paths(abi, old=False, bad=False, tp="local"):
+        import fogtools.abi
+        d = abi.base / "abi" / "1899" / "12" / "31" / "23"
+        for c in (fogtools.abi.nwcsaf_abi_channels
+                  | fogtools.abi.fogpy_abi_channels):
+            f = (d / f"C{c:>01d}" / f"OR_ABI-L1b-RadF-M3C{c:>02d}_G16_"
+                 "s18993652355000_e19000010010000_c19000010020000.nc")
+            yield f
+            if bad:
+                yield (d / f"C{c:>01d}" / f"OR_ABI-L1b-RadF-M6C{c:>02d}_G16_"
+                       "s18993652355000_e19000010010000_"
+                       "c19000010020000.nc")
+            if old:
+                # also make T-60, T-30, (last in in M6)
+                yield (d / f"C{c:>01d}" / f"OR_ABI-L1b-RadF-M3C{c:>02d}_G16_"
+                       "s18993652255000_e18993652310000_"
+                       "c19000010020000.nc")
+                yield (d / f"C{c:>01d}" / f"OR_ABI-L1b-RadF-M3C{c:>02d}_G16_"
+                       "s18993652325000_e18993652340000_"
+                       "c19000010020000.nc")
+
+    def _mk(self, abi, old=False, bad=False):
         """Make some files in abi.base
 
         This should ensure that abi.exists(...) returns True.
@@ -180,26 +234,9 @@ class TestABI:
         - ending 1900-01-01 00:10
         - created 1900-01-01 00:20
         """
-        import fogtools.abi
-        d = abi.base / "abi" / "1899" / "12" / "31" / "23"
-        for c in (fogtools.abi.nwcsaf_abi_channels
-                  | fogtools.abi.fogpy_abi_channels):
-            f = (d / f"C{c:>01d}" / f"OR_ABI-L1b-RadF-M3C{c:>02d}_G16_"
-                 "s18993652355000_e19000010010000_c19000010020000.nc")
+        for f in self._get_fake_paths(abi, old=old, bad=bad):
             f.parent.mkdir(parents=True, exist_ok=True)
             f.touch()
-            if bad:
-                (d / f"C{c:>01d}" / f"OR_ABI-L1b-RadF-M6C{c:>02d}_G16_"
-                 "s18993652355000_e19000010010000_"
-                 "c19000010020000.nc").touch()
-            if old:
-                # also make T-60, T-30, (last in in M6)
-                (d / f"C{c:>01d}" / f"OR_ABI-L1b-RadF-M3C{c:>02d}_G16_"
-                     "s18993652255000_e18993652310000_"
-                     "c19000010020000.nc").touch()
-                (d / f"C{c:>01d}" / f"OR_ABI-L1b-RadF-M3C{c:>02d}_G16_"
-                     "s18993652325000_e18993652340000_"
-                     "c19000010020000.nc").touch()
 
     def test_exists(self, abi, ts, monkeypatch):
         import fogtools.db
@@ -221,11 +258,34 @@ class TestABI:
         with pytest.raises(fogtools.db.FogDBError):
             abi.exists(ts)
 
-    @unittest.mock.patch("fogtools.abi.download_abi_period", autospec=True)
-    def test_store(self, fad, abi, ts):
-        fad.return_value = [pathlib.Path("/pineapple")]
-        abi.store(ts)
-        assert abi._generated[ts] == [pathlib.Path("/pineapple")]
+    @unittest.mock.patch("s3fs.S3FileSystem", autospec=True)
+    def test_store(self, sS, abi, monkeypatch):
+        import fogtools.abi
+        src_list = _gen_abi_src(
+                cs={2, 3, 4},
+                st=pandas.Timestamp("1899-12-31T12"),
+                ed=pandas.Timestamp("1900-01-01T12"))
+        t = pandas.Timestamp("1900-01-01T00")
+        exp_list = _gen_abi_dst(
+                abi,
+                cs={2, 3, 4},
+                st=pandas.Timestamp("1899-12-31T22:45"),
+                ed=pandas.Timestamp("1900-01-01T00:00"))
+
+        def fk_get(src, dest):
+            dest.parent.mkdir(exist_ok=True, parents=True)
+            dest.touch()
+
+        def fk_glob(pat):
+            return fnmatch.filter(src_list, pat)
+
+        sS.return_value.glob.side_effect = fk_glob
+        sS.return_value.get.side_effect = fk_get
+        abi.store(t)
+        assert set(abi._generated[t]) == {pathlib.Path(p) for p in exp_list}
+        monkeypatch.setattr(fogtools.abi, "nwcsaf_abi_channels", {2, 3, 4})
+        monkeypatch.setattr(fogtools.abi, "fogpy_abi_channels", {2, 3, 4})
+        assert abi.exists(t)
 
     @unittest.mock.patch("fogtools.abi.download_abi_period", autospec=True)
     @unittest.mock.patch("satpy.Scene", autospec=True)
@@ -254,7 +314,8 @@ class TestABI:
         fad.assert_called_once_with(
                 ts - pandas.Timedelta(65, "minutes"),
                 ts + pandas.Timedelta(5, "minutes"),
-                tps="F")
+                tps="F",
+                basedir=pathlib.Path(abi.base))
         self._mk(abi)
         abi.ensure(ts)
         # make sure it wasn't called again
