@@ -497,7 +497,7 @@ class _ABI(_Sat):
         selection = [p for p in files if p.match(
             f"*_s{timestamp:%Y%j%H%M%S}*.nc")]
         sc = satpy.Scene(
-                filenames=selection,
+                filenames=[str(x) for x in selection],
                 reader="abi_l1b")
         sc.load([f"C{ch:>02d}" for ch in
                  abi.nwcsaf_abi_channels | abi.fogpy_abi_channels])

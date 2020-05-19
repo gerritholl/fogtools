@@ -290,22 +290,33 @@ class TestABI:
 
     @unittest.mock.patch("fogtools.abi.download_abi_period", autospec=True)
     @unittest.mock.patch("satpy.Scene", autospec=True)
-    def test_load(self, sS, fad, abi, ts, tmp_path):
-        fad.return_value = [
-                (tmp_path / f"OR_ABI-L1b-RadF-M3C{c:>02d}_G16_"
-                    f"s1900{i:>03d}0000000_e1900{i:>03d}0000000_"
-                    f"c1900{i:>03d}0000000.nc")
-                for c in {10, 11}
-                for i in {1, 2, 3}]
-        abi.load(ts)
+    def test_load(self, sS, fad, abi, monkeypatch):
+        import fogtools.abi
+        t1 = pandas.Timestamp("1900-01-01T10")
+        t2 = pandas.Timestamp("1900-01-01T11")
+        exp = [pathlib.Path(x) for x in _gen_abi_dst(abi, cs={10, 11},
+                           st=t1, ed=t2)]
+        def mkexp(*args, **kwargs):
+            for e in exp:
+                e.parent.mkdir(exist_ok=True, parents=True)
+                e.touch()
+            return exp
+        fad.side_effect = mkexp
+        abi.load(t1)
         sS.assert_called_with(
-                filenames=[
-                    (tmp_path / f"OR_ABI-L1b-RadF-M3C{c:>02d}_G16_"
-                        f"s1900{i:>03d}0000000_e1900{i:>03d}0000000_"
-                        f"c1900{i:>03d}0000000.nc")
-                    for c in {10, 11}
-                    for i in {1}],
+                filenames=[str(x) for x in _gen_abi_dst(abi, cs={10, 11}, st=t1, ed=t1)],
                 reader="abi_l1b")
+        monkeypatch.setattr(fogtools.abi, "nwcsaf_abi_channels", {10, 11})
+        monkeypatch.setattr(fogtools.abi, "fogpy_abi_channels", {10, 11})
+        assert abi.exists(t1)
+        # call again now that side effect has occured and files are already
+        # present -> different logic, but reset fixture first
+        fad.reset_mock()
+        import fogtools.db
+        abi2 = _dbprep(abi.base.parent, "_ABI")
+        abi2.load(t1)
+        fad.assert_not_called()
+
 
     # test concrete methods defined in base class here, as far as not
     # overwritten by _ABI or trivial (such as ensure_deps)
