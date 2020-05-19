@@ -247,6 +247,7 @@ class TestABI:
         assert not abi.exists(ts)
         self._mk(abi, old=False)
         assert abi.exists(ts)
+        assert abi.exists(ts) >= set(self._get_fake_paths(abi, old=False))
         assert abi.exists(ts + pandas.Timedelta(12, "minutes"))
         assert not abi.exists(ts, past=True)
         assert not abi.exists(ts + pandas.Timedelta(2, "hours"))
@@ -363,15 +364,21 @@ class TestICON:
 
     # concrete methods from parent class
     def test_exists(self, icon, ts):
-        for f in {icon.base / "import" / "NWP_data" /
-                  f"S_NWC_NWP_1900-01-01T00:00:00Z_{i:>03d}.grib"
-                  for i in range(5)}:
+        p1 = {icon.base / "import" / "NWP_data" /
+              f"S_NWC_NWP_1900-01-01T00:00:00Z_{i:>03d}.grib"
+                  for i in range(5)}
+        for f in p1:
             f.parent.mkdir(parents=True, exist_ok=True)
             f.touch()
         assert not icon.exists(ts)
-        (icon.base / "import" / "NWP_data" /
-         "S_NWC_NWP_1900-01-01T00:00:00Z_005.grib").touch()
+        assert icon.exists(ts) == set()
+        p2 = (icon.base / "import" / "NWP_data" /
+              "S_NWC_NWP_1900-01-01T00:00:00Z_005.grib")
+        p2.touch()
         assert icon.exists(ts)
+        assert icon.exists(ts) >= p1
+        assert icon.exists(ts) >= {p2}
+        assert icon.exists(ts) == p1|{p2}
 
     @unittest.mock.patch("satpy.Scene", autospec=True)
     def test_load(self, sS, icon, ts):

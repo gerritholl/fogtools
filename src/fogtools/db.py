@@ -230,10 +230,18 @@ class _DB(abc.ABC):
         raise NotImplementedError()  # pragma: no cover
 
     def exists(self, timestamp):
-        for p in self.get_path(timestamp):
+        """Check if all files needed at <timestamp> exist.
+
+        Check if all files needed at ``timestamp`` exist.  If yes,
+        return a collection of files found.  If not all are found,
+        return False or an empty collection.
+        """
+
+        all_p = self.get_path(timestamp)
+        for p in all_p:
             if not p.exists():
-                return False
-        return True
+                return set()
+        return all_p
 
     def ensure(self, timestamp):
         if not self.exists(timestamp):
@@ -350,7 +358,9 @@ class _ABI(_Sat):
                 for dir in dirs])
 
     def _chan_ts_exists(self, ts, chan):
-        """Check if one file covering timestamp for channel exists
+        """Check if one file covering timestamp for channel exists.
+
+        Returns a collection of what has been found.
         """
 
         # ABI full disk files appear either ever 15 minutes (mode M3) or every
@@ -373,7 +383,7 @@ class _ABI(_Sat):
         files = self._search_file_two_dirs(ts, ts, chan)
         cnt1 = files.get("abi_l1b", [])
         if len(cnt1) == 1:
-            return True
+            return {pathlib.Path(cnt1[0])}
         elif len(cnt1) > 1:
             raise FogDBError(f"Channel {chan:d} found multiple times?! "
                              + ", ".join(str(c) for c in cnt1))
@@ -381,10 +391,10 @@ class _ABI(_Sat):
         start_search = ts - pandas.Timedelta(10, "minutes")
         files = self._search_file_two_dirs(start_search, ts, chan)
         if not files:
-            return False
+            return set()
         cnt2 = files["abi_l1b"]
         if len(cnt2) == 1:
-            return True
+            return {pathlib.Path(cnt2[0])}
         elif len(cnt2) < 1:  # not sure if this is possible
             raise RuntimeError(
                     "Got empty file list from satpys "
@@ -403,6 +413,7 @@ class _ABI(_Sat):
         up to T-0 minutes exist, as SAFNWC software can use this.
         """
 
+        found = set()
         # So this function either searches for:
         #   - ``[T-x, T]``
         #   - ``[T-y, T]``
@@ -423,22 +434,27 @@ class _ABI(_Sat):
         ot = functools.partial(pandas.Timedelta, unit="minutes")
         logger.debug("Checking all required ABI channels at "
                      f"{timestamp:%Y-%m-%d %H:%M}")
+        found = set()
         for chan in abi.nwcsaf_abi_channels | abi.fogpy_abi_channels:
             logger.debug(f"Checking channel {chan:d}")
-            if not self._chan_ts_exists(timestamp, chan):
+            chan_ts = self._chan_ts_exists(timestamp, chan)
+            if not chan_ts:
                 logger.debug(f"Channel {chan:d} missing at "
                              f"{timestamp:%Y-%m-%d %H:%M}")
-                return False
-            if past and not (
-                    (self._chan_ts_exists(timestamp - ot(60), chan)
-                     and self._chan_ts_exists(timestamp - ot(20), chan)
-                     or self._chan_ts_exists(timestamp - ot(30), chan))):
-                logger.debug(f"Channel {chan:d} available at "
-                             f"{timestamp:%Y-%m-%d %H:%M}, but missing "
-                             "one or more previous data files")
-                return False
+                return set()
+            found.update(chan_ts)
+            if past:
+                chan_ts_min = {}
+                for i in (20, 30, 60):
+                    chan_ts_min[i] = self._chan_ts_exists(timestamp - ot(i), chan)
+                if not (chan_ts_min[60] and chan_ts_min[20] or chan_ts_min[30]):
+                    logger.debug(f"Channel {chan:d} available at "
+                                 f"{timestamp:%Y-%m-%d %H:%M}, but missing "
+                                 "one or more previous data files")
+                    return set()
+                found.update(*(x for i in (20, 30, 60) if (x:=chan_ts_min[i])))
         else:
-            return True
+            return found
         raise RuntimeError("This code is unreachable")  # pragma: no cover
 
     def store(self, timestamp):
