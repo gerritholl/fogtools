@@ -481,7 +481,7 @@ class _ABI(_Sat):
         """Get scene containing relevant ABI channels
         """
         self.ensure(timestamp)
-        files = self._generated[timestamp]
+        selection = self.exists(timestamp)
         # I want to select those files where the time matches.  More files may
         # have been downloaded, in particular for the benefit of NWCSAF.  How
         # to do this matching?  Could use pathlib.Path.match or perhaps
@@ -494,10 +494,8 @@ class _ABI(_Sat):
         # 291, # PDF page 326).  This doesn't affect strptime which is
         # apparently what Satpy uses.
         logger.debug("Loading ABI from local disk")
-        selection = [p for p in files if p.match(
-            f"*_s{timestamp:%Y%j%H%M%S}*.nc")]
         sc = satpy.Scene(
-                filenames=[str(x) for x in selection],
+                filenames={str(x) for x in selection},
                 reader="abi_l1b")
         sc.load([f"C{ch:>02d}" for ch in
                  abi.nwcsaf_abi_channels | abi.fogpy_abi_channels])

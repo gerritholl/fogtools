@@ -292,6 +292,8 @@ class TestABI:
     @unittest.mock.patch("satpy.Scene", autospec=True)
     def test_load(self, sS, fad, abi, monkeypatch):
         import fogtools.abi
+        monkeypatch.setattr(fogtools.abi, "nwcsaf_abi_channels", {10, 11})
+        monkeypatch.setattr(fogtools.abi, "fogpy_abi_channels", {10, 11})
         t1 = pandas.Timestamp("1900-01-01T10")
         t2 = pandas.Timestamp("1900-01-01T11")
         exp = [pathlib.Path(x) for x in _gen_abi_dst(abi, cs={10, 11},
@@ -304,10 +306,8 @@ class TestABI:
         fad.side_effect = mkexp
         abi.load(t1)
         sS.assert_called_with(
-                filenames=[str(x) for x in _gen_abi_dst(abi, cs={10, 11}, st=t1, ed=t1)],
+                filenames={str(x) for x in _gen_abi_dst(abi, cs={10, 11}, st=t1, ed=t1)},
                 reader="abi_l1b")
-        monkeypatch.setattr(fogtools.abi, "nwcsaf_abi_channels", {10, 11})
-        monkeypatch.setattr(fogtools.abi, "fogpy_abi_channels", {10, 11})
         assert abi.exists(t1)
         # call again now that side effect has occured and files are already
         # present -> different logic, but reset fixture first
