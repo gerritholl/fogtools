@@ -84,13 +84,14 @@ def fakescene():
 @pytest.fixture
 def fakescene_realarea(fakearea):
     """Return a fake scene with real fake areas."""
+    import dask.array as da
     sc = satpy.Scene()
     sc["raspberry"] = xarray.DataArray(
-            numpy.arange(25).reshape(5, 5),
+            da.arange(25).reshape(5, 5),
             attrs={"area": fakearea,
                    "name": "raspberry"})
     sc["cloudberry"] = xarray.DataArray(
-            numpy.arange(25).reshape(5, 5),
+            da.arange(25).reshape(5, 5),
             attrs={"area": fakearea,
                    "name": "cloudberry"})
     return sc
