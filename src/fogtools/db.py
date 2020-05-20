@@ -294,6 +294,9 @@ class _DB(abc.ABC):
         implemented to return a scene object.  If a subclass implements
         self.load differently then it must also override extract.
 
+        Note: this will compute any dask arrays from which points are to be
+        extracted (such as in the scene from ABI_.load).
+
         Args:
             timestamp (pandas.Timestamp): time for which to extract
             lats (array_like): latitudes for which to extract
@@ -318,12 +321,17 @@ class _DB(abc.ABC):
                     numpy.array(lats))
             # x, y may contain masked values --- index where unmasked, and get
             # nan where masked
+            try:
+                src = da.data.compute()
+            except AttributeError:
+                src = da.data
+            extr = src[
+                numpy.where(x.mask, 0, x),
+                numpy.where(y.mask, 0, y)]
             vals[da.attrs["name"]] = numpy.where(
                     x.mask | y.mask,
                     numpy.nan,
-                    da.data[
-                        numpy.where(x.mask, 0, x),
-                        numpy.where(y.mask, 0, y)])
+                    extr)
         return pandas.DataFrame(
                 vals,
                 index=pandas.MultiIndex.from_arrays(
