@@ -15,11 +15,12 @@ import tempfile
 import pathlib
 import functools
 import collections
+import abc
 
+import numpy
 import pandas
 import satpy
 import satpy.readers
-import abc
 
 import sattools.io
 
@@ -305,8 +306,16 @@ class _DB(abc.ABC):
         logger.debug(f"Extracting data for {self!s} "
                      f"{timestamp:%Y-%m-%d %H:%M}")
         vals = {}
+        # pyproj 2.6 does not support other arrays than ndarrays, this may
+        # change with https://github.com/pyproj4/pyproj/issues/573 such that I
+        # can pass any array_like; but with pyproj 2.6, passing a
+        # pandas.Float64Index results in a SystemError, see for more info
+        # https://pytroll.slack.com/archives/C17CEU728/p1589903078309800 and
+        # onward conversation
         for da in sc:
-            (x, y) = da.attrs["area"].get_xy_from_lonlat(lons, lats)
+            (x, y) = da.attrs["area"].get_xy_from_lonlat(
+                    numpy.array(lons),
+                    numpy.array(lats))
             vals[da.attrs["name"]] = da.data[x, y]
         return pandas.DataFrame(
                 vals,

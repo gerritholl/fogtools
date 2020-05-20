@@ -88,12 +88,22 @@ def fakescene_realarea(fakearea):
 
 @pytest.fixture
 def fake_df():
+    """Produce fake dataframe.
+
+    This fake dataframe is intended as a drop-in replacement for ground station
+    data.
+    """
+
+    # the peculiar way of getting lat/lon is to make sure it doesn't correlate
+    # too much with the time, so that if selecting several adjecent series the
+    # points are not close to each other, however I'm still avoiding randomness
+    # in unit tests
     df = pandas.DataFrame(
             {"DATE": (dr:=pandas.date_range(  # noqa: E231
                 "18991231T12", "19000101T12",
                 freq="15min")),
-             "LATITUDE": numpy.linspace(-89, 89, dr.size),
-             "LONGITUDE": numpy.linspace(-179, 179, dr.size),
+             "LATITUDE": numpy.linspace(0, 10000, dr.size) % 180 - 90,
+             "LONGITUDE": numpy.linspace(0, 10000, dr.size) % 360 - 180,
              "values": numpy.empty(shape=dr.size)}).sample(
                      frac=1, random_state=42)
     return df.set_index(["DATE", "LATITUDE", "LONGITUDE"])
