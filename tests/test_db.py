@@ -81,19 +81,19 @@ def fakescene():
     return sc
 
 
-@pytest.fixture
-def fakescene_realarea(fakearea):
+def _mk_fakescene_realarea(fakearea, *names):
     """Return a fake scene with real fake areas."""
     import dask.array as da
     sc = satpy.Scene()
-    sc["raspberry"] = xarray.DataArray(
-            da.arange(25).reshape(5, 5),
-            attrs={"area": fakearea,
-                   "name": "raspberry"})
-    sc["cloudberry"] = xarray.DataArray(
-            da.arange(25).reshape(5, 5),
-            attrs={"area": fakearea,
-                   "name": "cloudberry"})
+    for name in names:
+        sc[name] = xarray.DataArray(
+                da.arange(25).reshape(5, 5),
+                attrs={"area": fakearea,
+                       "name": name})
+        sc[name] = xarray.DataArray(
+                da.arange(25).reshape(5, 5),
+                attrs={"area": fakearea,
+                       "name": name})
     return sc
 
 
@@ -197,8 +197,7 @@ def test_init(db):
     assert db.fog is not None
 
 
-def test_extend(db, abi, icon, fake_df, ts, caplog, fakescene_realarea,
-                fake_process):
+def test_extend(db, abi, icon, fake_df, ts, caplog, fakearea, fake_process):
     # TODO: rewrite test with less mocking
     #
     # function is probably mocking too much, the test passes but it fails in
@@ -207,8 +206,10 @@ def test_extend(db, abi, icon, fake_df, ts, caplog, fakescene_realarea,
     import fogtools.isd
     db.sat = abi
     db.sat.load = unittest.mock.MagicMock()
-    db.sat.load.return_value = fakescene_realarea
-    db.nwp = icon  # unittest.mock.MagicMock()
+    db.sat.load.return_value = _mk_fakescene_realarea(fakearea, "raspberry", "banana")
+    db.nwp = icon
+    db.nwp.load = unittest.mock.MagicMock()
+    db.nwp.load.return_value = _mk_fakescene_realarea(fakearea, "apricot", "pineapple")
     db.cmic = unittest.mock.MagicMock()
     db.dem = unittest.mock.MagicMock()
     db.fog = unittest.mock.MagicMock()
@@ -216,7 +217,6 @@ def test_extend(db, abi, icon, fake_df, ts, caplog, fakescene_realarea,
     loc.parent.mkdir(parents=True)
     fake_df.to_parquet(fogtools.isd.get_db_location())
     gd = db.ground.load(ts)
-    # db.nwp.extract.return_value = _mkdf(gd.index, "apricot", "pineapple")
     db.cmic.extract.return_value = _mkdf(gd.index, "peach", "redcurrant")
     db.dem.extract.return_value = _mkdf(gd.index, "damson", "prune")
     db.fog.extract.return_value = _mkdf(gd.index, "aubergine", "shallot")
@@ -226,7 +226,7 @@ def test_extend(db, abi, icon, fake_df, ts, caplog, fakescene_realarea,
         # assert "Extracting data for [fogdb component ABI]
         # 1900-01-01 00:00:00" in caplog.text
     assert sorted(db.data.columns) == [
-            "apricot", "aubergine", "cloudberry", "damson", "peach",
+            "apricot", "aubergine", "banana", "damson", "peach",
             "pineapple", "prune", "raspberry", "redcurrant", "shallot",
             "values"]
     assert db.data.shape == (9, 11)
@@ -445,14 +445,22 @@ class TestICON:
         assert icon.exists(ts) == p1 | {p2}
 
     @unittest.mock.patch("satpy.Scene", autospec=True)
-    def test_load(self, sS, icon, ts, fake_process):
-        icon.load(ts)
+    @unittest.mock.patch("fogtools.sky.send_to_sky", autospec=True)
+    def test_load(self, fss, sS, icon, ts, fake_process):
+        def fk_snd(ba):
+            allp = icon.get_path(ts)
+            for f in allp:
+                with open(f, "wb") as fp:
+                    fp.write(b"\00")
+        fss.side_effect = fk_snd
+        sc = icon.load(ts)
         sS.assert_called_once_with(
                 filenames={
                     icon.base / "import" / "NWP_data" /
                     f"S_NWC_NWP_1900-01-01T00:00:00Z_{i:>03d}.grib"
                     for i in range(6)},
                 reader="grib")
+        assert icon.exists(ts)
 
 
 class TestNWCSAF:

@@ -426,6 +426,8 @@ def get_and_send(base, period):
     send_to_sky(ba)
     for eof in rb.expected_output_files:
         peof = pathlib.Path(eof)
+        if peof.suffix != ".grib":
+            continue
         if not (peof.exists() and peof.stat().st_size > 0):
             raise SkyFailure(f"File absent or empty: {eof!s}, sky "
                              "apparently failed to find data.")
