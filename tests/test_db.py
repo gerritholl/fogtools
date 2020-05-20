@@ -65,9 +65,19 @@ def fakescene():
             attrs={"area": unittest.mock.MagicMock(),
                    "name": "cloudberry"})
     sc["raspberry"].attrs["area"].get_xy_from_lonlat.return_value = (
-            numpy.array([1, 1]), numpy.array([1, 2]))
+            numpy.ma.masked_array(
+                numpy.array([1, 1]),
+                [False, False]),
+            numpy.ma.masked_array(
+                numpy.array([1, 2]),
+                [False, False]))
     sc["cloudberry"].attrs["area"].get_xy_from_lonlat.return_value = (
-            numpy.array([2, 2]), numpy.array([2, 3]))
+            numpy.ma.masked_array(
+                numpy.array([2, 2]),
+                [False, False]),
+            numpy.ma.masked_array(
+                numpy.array([2, 3]),
+                [False, False]))
     return sc
 
 
@@ -193,7 +203,6 @@ def test_extend(db, abi, fake_df, ts, caplog, fakescene_realarea):
     # the real world because the preconditions before calling .extract are not
     # met
     import fogtools.isd
-    #db.sat = unittest.mock.MagicMock()
     db.sat = abi
     db.sat.load = unittest.mock.MagicMock()
     db.sat.load.return_value = fakescene_realarea
@@ -205,7 +214,6 @@ def test_extend(db, abi, fake_df, ts, caplog, fakescene_realarea):
     loc.parent.mkdir(parents=True)
     fake_df.to_parquet(fogtools.isd.get_db_location())
     gd = db.ground.load(ts)
-    #db.sat.extract.return_value = _mkdf(gd.index, "raspberry", "banana")
     db.nwp.extract.return_value = _mkdf(gd.index, "apricot", "pineapple")
     db.cmic.extract.return_value = _mkdf(gd.index, "peach", "redcurrant")
     db.dem.extract.return_value = _mkdf(gd.index, "damson", "prune")
@@ -216,12 +224,13 @@ def test_extend(db, abi, fake_df, ts, caplog, fakescene_realarea):
         # assert "Extracting data for [fogdb component ABI]
         # 1900-01-01 00:00:00" in caplog.text
     assert sorted(db.data.columns) == [
-            "apricot", "aubergine", "banana", "damson", "peach", "pineapple",
-            "prune", "raspberry", "redcurrant", "shallot", "values"]
-    assert db.data.shape == (5, 11)
+            "apricot", "aubergine", "cloudberry", "damson", "peach",
+            "pineapple", "prune", "raspberry", "redcurrant", "shallot",
+            "values"]
+    assert db.data.shape == (9, 11)
     db.fog.extract.return_value = _mkdf(gd.index[:3], "aubergine", "shallot")
     db.extend(ts)
-    assert db.data.shape == (10, 11)
+    assert db.data.shape == (18, 11)
     # TODO: this needs to test tolerances too, and now it has nans, will that
     # happen in the real world?  Perhaps.
 

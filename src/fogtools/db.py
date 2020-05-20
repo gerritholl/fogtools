@@ -316,7 +316,14 @@ class _DB(abc.ABC):
             (x, y) = da.attrs["area"].get_xy_from_lonlat(
                     numpy.array(lons),
                     numpy.array(lats))
-            vals[da.attrs["name"]] = da.data[x, y]
+            # x, y may contain masked values --- index where unmasked, and get
+            # nan where masked
+            vals[da.attrs["name"]] = numpy.where(
+                    x.mask | y.mask,
+                    numpy.nan,
+                    da.data[
+                        numpy.where(x.mask, 0, x),
+                        numpy.where(y.mask, 0, y)])
         return pandas.DataFrame(
                 vals,
                 index=pandas.MultiIndex.from_arrays(
@@ -455,8 +462,10 @@ class _ABI(_Sat):
             if past:
                 chan_ts_min = {}
                 for i in (20, 30, 60):
-                    chan_ts_min[i] = self._chan_ts_exists(timestamp - ot(i), chan)
-                if not (chan_ts_min[60] and chan_ts_min[20] or chan_ts_min[30]):
+                    chan_ts_min[i] = self._chan_ts_exists(
+                            timestamp - ot(i), chan)
+                if not (chan_ts_min[60] and chan_ts_min[20]
+                        or chan_ts_min[30]):
                     logger.debug(f"Channel {chan:d} available at "
                                  f"{timestamp:%Y-%m-%d %H:%M}, but missing "
                                  "one or more previous data files")
