@@ -478,7 +478,8 @@ class _ABI(_Sat):
                                  f"{timestamp:%Y-%m-%d %H:%M}, but missing "
                                  "one or more previous data files")
                     return set()
-                found.update(*(x for i in (20, 30, 60) if (x:=chan_ts_min[i])))
+                found.update(*(x for i in (20, 30, 60)
+                               if (x := chan_ts_min[i])))
         else:
             return found
         raise RuntimeError("This code is unreachable")  # pragma: no cover
