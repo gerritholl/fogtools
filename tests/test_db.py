@@ -197,7 +197,8 @@ def test_init(db):
     assert db.fog is not None
 
 
-def test_extend(db, abi, fake_df, ts, caplog, fakescene_realarea):
+def test_extend(db, abi, icon, fake_df, ts, caplog, fakescene_realarea,
+                fake_process):
     # TODO: rewrite test with less mocking
     #
     # function is probably mocking too much, the test passes but it fails in
@@ -207,7 +208,7 @@ def test_extend(db, abi, fake_df, ts, caplog, fakescene_realarea):
     db.sat = abi
     db.sat.load = unittest.mock.MagicMock()
     db.sat.load.return_value = fakescene_realarea
-    db.nwp = unittest.mock.MagicMock()
+    db.nwp = icon  # unittest.mock.MagicMock()
     db.cmic = unittest.mock.MagicMock()
     db.dem = unittest.mock.MagicMock()
     db.fog = unittest.mock.MagicMock()
@@ -215,7 +216,7 @@ def test_extend(db, abi, fake_df, ts, caplog, fakescene_realarea):
     loc.parent.mkdir(parents=True)
     fake_df.to_parquet(fogtools.isd.get_db_location())
     gd = db.ground.load(ts)
-    db.nwp.extract.return_value = _mkdf(gd.index, "apricot", "pineapple")
+    # db.nwp.extract.return_value = _mkdf(gd.index, "apricot", "pineapple")
     db.cmic.extract.return_value = _mkdf(gd.index, "peach", "redcurrant")
     db.dem.extract.return_value = _mkdf(gd.index, "damson", "prune")
     db.fog.extract.return_value = _mkdf(gd.index, "aubergine", "shallot")
@@ -444,7 +445,7 @@ class TestICON:
         assert icon.exists(ts) == p1 | {p2}
 
     @unittest.mock.patch("satpy.Scene", autospec=True)
-    def test_load(self, sS, icon, ts):
+    def test_load(self, sS, icon, ts, fake_process):
         icon.load(ts)
         sS.assert_called_once_with(
                 filenames={

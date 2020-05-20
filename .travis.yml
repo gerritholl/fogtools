@@ -6,7 +6,7 @@ env:
     - PYTHON_VERSION=$TRAVIS_PYTHON_VERSION
     - MAIN_CMD="pytest"
     - CONDA_DEPENDENCIES="satpy setuptools pyresample pytest-cov coveralls coverage codecov matplotlib pillow pandas s3fs pytables pyarrow tabulate lxml pytest-socket"
-    - PIP_DEPENDENCIES=""
+    - PIP_DEPENDENCIES="pytest-subprocess"
     - CONDA_CHANNELS="rttools conda-forge"
     - CONDA_CHANNEL_PRIORITY="strict"
     - SETUP_XVFB=False

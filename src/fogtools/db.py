@@ -245,10 +245,11 @@ class _DB(abc.ABC):
         return all_p
 
     def ensure(self, timestamp):
+        logger.debug(f"Ensuring {self!s} is available")
         if not self.exists(timestamp):
             logger.debug("Input data unavailable or incomplete for "
                          f"{self!s} for {timestamp:%Y-%m-%d %H:%M}, "
-                         "downloading")
+                         "downloading / generating")
             self.store(timestamp)
 
     def ensure_deps(self, timestamp):
@@ -258,6 +259,7 @@ class _DB(abc.ABC):
             self.link(dep, timestamp)
 
     def load(self, timestamp):
+        self.ensure(timestamp)
         logger.debug(f"Loading {self!s}")
         sc = satpy.Scene(
                 filenames=self.get_path(timestamp),
