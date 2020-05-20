@@ -36,7 +36,20 @@ def _dbprep(tmp_path, cls, *args, **kwargs):
 
 
 @pytest.fixture
+def fakearea():
+    """Make a 5x5 pixel area for full disc ABI."""
+    from pyresample.geometry import AreaDefinition
+    return AreaDefinition(
+            "fribbulus xax", "fribbulus xax", "fribbulus xax",
+            {'proj': 'geos', 'sweep': 'x', 'lon_0': -89.5, 'h': 35786023,
+                'x_0': 0, 'y_0': 0, 'ellps': 'GRS80', 'units': 'm', 'no_defs':
+                None, 'type': 'crs'},
+            5, 5, (-5434894.8851, -4585692.5593, 4585692.5593, 5434894.8851))
+
+
+@pytest.fixture
 def fakescene():
+    """Return a fake scene with mocked areas."""
     # let's make a Scene
     #
     # should I mock get_xy_from_lonlat here?  Probably as it's an external
@@ -55,6 +68,21 @@ def fakescene():
             numpy.array([1, 1]), numpy.array([1, 2]))
     sc["cloudberry"].attrs["area"].get_xy_from_lonlat.return_value = (
             numpy.array([2, 2]), numpy.array([2, 3]))
+    return sc
+
+
+@pytest.fixture
+def fakescene_realarea(fakearea):
+    """Return a fake scene with real fake areas."""
+    sc = satpy.Scene()
+    sc["raspberry"] = xarray.DataArray(
+            numpy.arange(25).reshape(5, 5),
+            attrs={"area": fakearea,
+                   "name": "raspberry"})
+    sc["cloudberry"] = xarray.DataArray(
+            numpy.arange(25).reshape(5, 5),
+            attrs={"area": fakearea,
+                   "name": "cloudberry"})
     return sc
 
 
@@ -148,14 +176,17 @@ def test_init(db):
     assert db.fog is not None
 
 
-def test_extend(db, fake_df, ts, caplog):
+def test_extend(db, abi, fake_df, ts, caplog, fakescene_realarea):
     # TODO: rewrite test with less mocking
     #
     # function is probably mocking too much, the test passes but it fails in
     # the real world because the preconditions before calling .extract are not
     # met
     import fogtools.isd
-    db.sat = unittest.mock.MagicMock()
+    #db.sat = unittest.mock.MagicMock()
+    db.sat = abi
+    db.sat.load = unittest.mock.MagicMock()
+    db.sat.load.return_value = fakescene_realarea
     db.nwp = unittest.mock.MagicMock()
     db.cmic = unittest.mock.MagicMock()
     db.dem = unittest.mock.MagicMock()
@@ -164,7 +195,7 @@ def test_extend(db, fake_df, ts, caplog):
     loc.parent.mkdir(parents=True)
     fake_df.to_parquet(fogtools.isd.get_db_location())
     gd = db.ground.load(ts)
-    db.sat.extract.return_value = _mkdf(gd.index, "raspberry", "banana")
+    #db.sat.extract.return_value = _mkdf(gd.index, "raspberry", "banana")
     db.nwp.extract.return_value = _mkdf(gd.index, "apricot", "pineapple")
     db.cmic.extract.return_value = _mkdf(gd.index, "peach", "redcurrant")
     db.dem.extract.return_value = _mkdf(gd.index, "damson", "prune")
@@ -296,8 +327,9 @@ class TestABI:
         monkeypatch.setattr(fogtools.abi, "fogpy_abi_channels", {10, 11})
         t1 = pandas.Timestamp("1900-01-01T10")
         t2 = pandas.Timestamp("1900-01-01T11")
-        exp = [pathlib.Path(x) for x in _gen_abi_dst(abi, cs={10, 11},
-                           st=t1, ed=t2)]
+        exp = [pathlib.Path(x) for x in
+               _gen_abi_dst(abi, cs={10, 11}, st=t1, ed=t2)]
+
         def mkexp(*args, **kwargs):
             for e in exp:
                 e.parent.mkdir(exist_ok=True, parents=True)
@@ -306,7 +338,8 @@ class TestABI:
         fad.side_effect = mkexp
         abi.load(t1)
         sS.assert_called_with(
-                filenames={str(x) for x in _gen_abi_dst(abi, cs={10, 11}, st=t1, ed=t1)},
+                filenames={str(x) for x in
+                           _gen_abi_dst(abi, cs={10, 11}, st=t1, ed=t1)},
                 reader="abi_l1b")
         assert abi.exists(t1)
         # call again now that side effect has occured and files are already
@@ -316,7 +349,6 @@ class TestABI:
         abi2 = _dbprep(abi.base.parent, "_ABI")
         abi2.load(t1)
         fad.assert_not_called()
-
 
     # test concrete methods defined in base class here, as far as not
     # overwritten by _ABI or trivial (such as ensure_deps)
@@ -377,7 +409,7 @@ class TestICON:
     def test_exists(self, icon, ts):
         p1 = {icon.base / "import" / "NWP_data" /
               f"S_NWC_NWP_1900-01-01T00:00:00Z_{i:>03d}.grib"
-                  for i in range(5)}
+              for i in range(5)}
         for f in p1:
             f.parent.mkdir(parents=True, exist_ok=True)
             f.touch()
@@ -389,7 +421,7 @@ class TestICON:
         assert icon.exists(ts)
         assert icon.exists(ts) >= p1
         assert icon.exists(ts) >= {p2}
-        assert icon.exists(ts) == p1|{p2}
+        assert icon.exists(ts) == p1 | {p2}
 
     @unittest.mock.patch("satpy.Scene", autospec=True)
     def test_load(self, sS, icon, ts):
