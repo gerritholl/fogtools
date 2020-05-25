@@ -51,5 +51,6 @@ def tmpenv(monkeypatch, tmp_path):
 
 @pytest.fixture(scope="session", autouse=True)
 def setUp(tmp_path_factory):
-    os.environ["XDG_CACHE_HOME"] = str(tmp_path_factory.mktemp("xdg_cache_home"))
+    os.environ["XDG_CACHE_HOME"] = str(
+            tmp_path_factory.mktemp("xdg_cache_home"))
     os.environ["SAFNWC"] = str(tmp_path_factory.mktemp("safnwc"))

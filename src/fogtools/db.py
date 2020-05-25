@@ -481,7 +481,7 @@ class _ABI(_Sat):
                                  "one or more previous data files")
                     return set()
                 found.update(*(x for i in (20, 30, 60)
-                               if (x := chan_ts_min[i])))
+                               if (x := chan_ts_min[i])))  # noqa: E203, E231
         else:
             return found
         raise RuntimeError("This code is unreachable")  # pragma: no cover
@@ -540,12 +540,31 @@ class _ICON(_NWP):
     name = "ICON"
 
     def get_path(self, timestamp):
+        """Get best ICON path for timestamp.
+
+        Given a timestamp, get the most suitable ICON path to read.  That's
+        either the analysis file (if nearest hour correspond to one) or a
+        forecast for up to five hours.
+        """
+
         rb = sky.RequestBuilder(self.base)
+        timestamp = timestamp.round("H")  # get forecast for nearest whole hour
+        # get six-hour forecast period corresponding to timestamp, up to next
+        # analysis
         period = sky.timestamp2period(timestamp)
         rb.get_request_ba(sky.period2daterange(period))
+        # all expected output files according to the sky query builder
         exp = rb.expected_output_files
+        fn = sky.make_icon_nwcsaf_filename(
+                self.base,
+                period.start_time,
+                timestamp.hour - period.start_time.hour)
+        if fn not in exp:
+            raise ValueError(
+                    f"I would expect filename {fn!s}, but I'm told "
+                    f"to expect only {','.join([str(f) for f in exp])!s}")
         # I don't care about the logfiles "ihits" and "info"
-        return {e for e in exp if e.suffix == ".grib"}
+        return {fn}
 
     def store(self, timestamp):
         """Get model analysis and forecast for input to NWCSAF

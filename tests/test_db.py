@@ -197,7 +197,8 @@ def test_init(db):
     assert db.fog is not None
 
 
-def test_extend(db, abi, icon, fake_df, ts, caplog, fakearea, fake_process):
+def test_extend(db, abi, icon, nwcsaf, fake_df, ts, caplog, fakearea,
+                fake_process):
     # TODO: rewrite test with less mocking
     #
     # function is probably mocking too much, the test passes but it fails in
@@ -206,10 +207,12 @@ def test_extend(db, abi, icon, fake_df, ts, caplog, fakearea, fake_process):
     import fogtools.isd
     db.sat = abi
     db.sat.load = unittest.mock.MagicMock()
-    db.sat.load.return_value = _mk_fakescene_realarea(fakearea, "raspberry", "banana")
+    db.sat.load.return_value = _mk_fakescene_realarea(
+            fakearea, "raspberry", "banana")
     db.nwp = icon
     db.nwp.load = unittest.mock.MagicMock()
-    db.nwp.load.return_value = _mk_fakescene_realarea(fakearea, "apricot", "pineapple")
+    db.nwp.load.return_value = _mk_fakescene_realarea(
+            fakearea, "apricot", "pineapple")
     db.cmic = unittest.mock.MagicMock()
     db.dem = unittest.mock.MagicMock()
     db.fog = unittest.mock.MagicMock()
@@ -390,8 +393,6 @@ class TestABI:
         abi.link(None, None)  # this doesn't do anything
 
     def test_extract(self, abi, ts, fakescene):
-        # TODO: this needs to test what happens if lat/lon are out of the area.
-        # What does pyresample do here?  NAN or exception?
         abi.load = unittest.mock.MagicMock()
         abi.load.return_value = fakescene
         df = abi.extract(ts, numpy.array([10, 10]), numpy.array([10, 15]))
@@ -413,12 +414,19 @@ class TestABI:
 
 
 class TestICON:
-    def test_get_path(self, icon, ts):
-        ps = icon.get_path(ts)
-
-        assert ps == {icon.base / "import" / "NWP_data" /
-                      f"S_NWC_NWP_1900-01-01T00:00:00Z_{i:>03d}.grib"
-                      for i in range(6)}
+    def test_get_path(self, icon):
+        t1 = pandas.Timestamp("1900-01-01T00:00:00")
+        t2 = pandas.Timestamp("1900-01-01T04:00:00")
+        t3 = pandas.Timestamp("1900-01-01T09:00:00")
+        t4 = pandas.Timestamp("1900-01-01T09:59:00")
+        t5 = pandas.Timestamp("1900-01-01T11:59:00")
+        fmt = str(icon.base / "import" / "NWP_data" /
+                  "S_NWC_NWP_1900-01-01T{h:>02d}:00:00Z_{i:>03d}.grib")
+        assert icon.get_path(t1) == {pathlib.Path(fmt.format(h=0, i=0))}
+        assert icon.get_path(t2) == {pathlib.Path(fmt.format(h=0, i=4))}
+        assert icon.get_path(t3) == {pathlib.Path(fmt.format(h=6, i=3))}
+        assert icon.get_path(t4) == {pathlib.Path(fmt.format(h=6, i=4))}
+        assert icon.get_path(t5) == {pathlib.Path(fmt.format(h=12, i=0))}
 
     @unittest.mock.patch("fogtools.sky.get_and_send", autospec=True)
     def test_store(self, fsg, icon, ts, tmp_path):
@@ -453,7 +461,7 @@ class TestICON:
                 with open(f, "wb") as fp:
                     fp.write(b"\00")
         fss.side_effect = fk_snd
-        sc = icon.load(ts)
+        icon.load(ts)
         sS.assert_called_once_with(
                 filenames={
                     icon.base / "import" / "NWP_data" /
