@@ -588,9 +588,10 @@ class _NWCSAF(_CMIC):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.base = os.getenv("SAFNWC")
-        if not self.base:
+        base = os.getenv("SAFNWC")
+        if not base:
             raise FogDBError("Environment variable SAFNWC not set")
+        self.base = pathlib.Path(base)
 
     def exists(self, timestamp):
         before = timestamp - pandas.Timedelta(15, "minutes")

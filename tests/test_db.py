@@ -32,7 +32,6 @@ def ts():
 def _dbprep(tmp_path, cls, *args, **kwargs):
     import fogtools.db
     db = getattr(fogtools.db, cls)(*args, **kwargs)
-    db.base = tmp_path / str(cls)
     return db
 
 
@@ -475,6 +474,9 @@ class TestICON:
 
 
 class TestNWCSAF:
+    def test_init(self, nwcsaf):
+        assert isinstance(nwcsaf.base, pathlib.Path)
+
     def test_get_path(self, nwcsaf, ts):
         ps = nwcsaf.get_path(ts)
         assert ps == [(nwcsaf.base / "export" / "CMIC"
@@ -518,7 +520,6 @@ class TestNWCSAF:
         sr.assert_called_once_with(["SAFNWCTM"], check=True)
 
     def test_get_dep_loc(self, nwcsaf, abi, icon, monkeypatch, tmp_path):
-        import fogtools.db
         monkeypatch.setenv("SAFNWC", str(tmp_path))
         p = nwcsaf._get_dep_loc(abi)
         assert p == nwcsaf.base / "import" / "Sat_data"
