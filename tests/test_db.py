@@ -4,6 +4,7 @@ import subprocess
 import unittest.mock
 import logging
 import fnmatch
+import re
 
 import numpy.testing
 import pandas
@@ -436,39 +437,41 @@ class TestICON:
 
     # concrete methods from parent class
     def test_exists(self, icon, ts):
+        t = pandas.Timestamp("1900-01-01T05:00:00")
         p1 = {icon.base / "import" / "NWP_data" /
               f"S_NWC_NWP_1900-01-01T00:00:00Z_{i:>03d}.grib"
               for i in range(5)}
         for f in p1:
             f.parent.mkdir(parents=True, exist_ok=True)
             f.touch()
-        assert not icon.exists(ts)
-        assert icon.exists(ts) == set()
+        assert not icon.exists(t)
+        assert icon.exists(t) == set()
         p2 = (icon.base / "import" / "NWP_data" /
               "S_NWC_NWP_1900-01-01T00:00:00Z_005.grib")
         p2.touch()
-        assert icon.exists(ts)
-        assert icon.exists(ts) >= p1
-        assert icon.exists(ts) >= {p2}
-        assert icon.exists(ts) == p1 | {p2}
+        assert icon.exists(t)
+        assert icon.exists(t) == {p2}
 
     @unittest.mock.patch("satpy.Scene", autospec=True)
     @unittest.mock.patch("fogtools.sky.send_to_sky", autospec=True)
-    def test_load(self, fss, sS, icon, ts, fake_process):
+    def test_load(self, fss, sS, icon, fake_process):
+        t = pandas.Timestamp("1900-01-01T01:23:45")
+        # the sky builder always creates all forecast files up to the next
+        # analysis (why did I do that?)
+
         def fk_snd(ba):
-            allp = icon.get_path(ts)
-            for f in allp:
+            for f in set(re.findall(str(icon.base).encode("ascii")
+                                    + rb"[^ ]*\.grib", ba)):
                 with open(f, "wb") as fp:
                     fp.write(b"\00")
         fss.side_effect = fk_snd
-        icon.load(ts)
+        icon.load(t)
         sS.assert_called_once_with(
                 filenames={
                     icon.base / "import" / "NWP_data" /
-                    f"S_NWC_NWP_1900-01-01T00:00:00Z_{i:>03d}.grib"
-                    for i in range(6)},
+                    "S_NWC_NWP_1900-01-01T00:00:00Z_001.grib"},
                 reader="grib")
-        assert icon.exists(ts)
+        assert icon.exists(t)
 
 
 class TestNWCSAF:
@@ -536,10 +539,10 @@ class TestNWCSAF:
         assert exp.resolve() == tmp_path / "abi" / "abi.nc"
         nwcsaf.link(icon, ts)
         exp = (tmp_path / "import" / "NWP_data" /
-               "S_NWC_NWP_1900-01-01T00:00:00Z_002.grib")
+               "S_NWC_NWP_1900-01-01T00:00:00Z_000.grib")
         assert exp.is_symlink()
         assert (exp.resolve() == icon.base / "import" / "NWP_data" /
-                "S_NWC_NWP_1900-01-01T00:00:00Z_002.grib")
+                "S_NWC_NWP_1900-01-01T00:00:00Z_000.grib")
 
     @unittest.mock.patch("time.sleep", autospec=True)
     def test_wait_for_output(self, tisl, nwcsaf, ts, monkeypatch, tmp_path):
