@@ -586,11 +586,25 @@ class _NWCSAF(_CMIC):
     reader = "nwcsaf-geo"
     name = "NWCSAF-GEO"
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.base = os.getenv("SAFNWC")
+        if not self.base:
+            raise FogDBError("Environment variable SAFNWC not set")
+
+    def exists(self, timestamp):
+        before = timestamp - pandas.Timedelta(15, "minutes")
+        return satpy.readers.find_files_and_readers(
+            before.to_pydatetime().replace(tzinfo=None),
+            timestamp.to_pydatetime().replace(tzinfo=None),
+            self.base / "export" / "CMIC",
+            "nwcsaf-geo",
+            missing_ok=True).get("nwcsaf-geo", set())
+
     def get_path(self, timestamp):
-        return [(self.base /
-                 f"{timestamp:%Y}" / f"{timestamp:%m}" / f"{timestamp:%d}" /
+        return [(self.base / "export" / "CMIC" /
                  f"S_NWC_CMIC_GOES16_NEW-ENGLAND-NR_"
-                f"{timestamp:%Y%m%dT%H%M%S}Z.nc")]
+                 f"{timestamp:%Y%m%dT%H%M%S}Z.nc")]
 
     def store(self, timestamp):
         """Store NWCSAF output
@@ -665,10 +679,7 @@ class _NWCSAF(_CMIC):
         but the data may be elsewhere.  This static method determines where
         these data are expected by the SAFNWC software.
         """
-        safnwc = os.getenv("SAFNWC")
-        if not safnwc:
-            raise FogDBError("Environment variable SAFNWC not set")
-        p = pathlib.Path(safnwc) / "import"
+        p = pathlib.Path(self.base) / "import"
         if isinstance(dep, _Sat):
             return p / "Sat_data"
         elif isinstance(dep, _NWP):
@@ -692,11 +703,10 @@ class _NWCSAF(_CMIC):
         """
         if not self.is_running():
             raise FogDBError("SAFNWC is not running")
-        logger.info("Waiting for SAFNWC results")
         t = 0
-        of = self.get_path(timestamp)[0]
+        logger.info(f"Waiting for SAFNWC results in {self.base!s}")
         while t < timeout:
-            if of.exists():
+            if self.exists(timestamp):
                 return
             time.sleep(10)
             t += 10

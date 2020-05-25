@@ -545,24 +545,25 @@ class TestNWCSAF:
                 "S_NWC_NWP_1900-01-01T00:00:00Z_000.grib")
 
     @unittest.mock.patch("time.sleep", autospec=True)
-    def test_wait_for_output(self, tisl, nwcsaf, ts, monkeypatch, tmp_path):
+    def test_wait_for_output(self, tisl, nwcsaf, monkeypatch, tmp_path):
         import fogtools.db
         monkeypatch.setenv("SAFNWC", str(tmp_path))
         nwcsaf.is_running = unittest.mock.MagicMock()
         nwcsaf.is_running.return_value = False
         with pytest.raises(fogtools.db.FogDBError):
-            nwcsaf.wait_for_output(ts)
-        p = nwcsaf.get_path(ts)[0]
+            nwcsaf.wait_for_output(ts, timeout=20)
+        t = pandas.Timestamp("1900-01-01T00:00:00")
+        p = (nwcsaf.base / "export" / "CMIC" / "S_NWC_CMIC_GOES16_NEW-ENGLAND-"
+             "NR_18991231T235110Z.nc")
         p.parent.mkdir(exist_ok=True, parents=True)
         p.touch()
         nwcsaf.is_running.return_value = True
-        nwcsaf.wait_for_output(ts)
+        nwcsaf.wait_for_output(t, timeout=20)
         assert tisl.call_count == 0
         p.unlink()
         with pytest.raises(fogtools.db.FogDBError):
-            nwcsaf.wait_for_output(ts)
-            assert tisl.call_count == 60
-        nwcsaf.is_running.return_value = False
+            nwcsaf.wait_for_output(t, timeout=20)
+        assert tisl.call_count == 2
 
     def test_ensure(self, nwcsaf, ts, fake_process):
         nwcsaf.wait_for_output = unittest.mock.MagicMock()
