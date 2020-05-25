@@ -704,6 +704,8 @@ class _NWCSAF(_CMIC):
             raise FogDBError(f"No SAFNWC result after {timeout:d} s")
 
     def ensure(self, timestamp):
+        if not self.is_running():
+            self.start_running()
         self.wait_for_output(timestamp)
 
 

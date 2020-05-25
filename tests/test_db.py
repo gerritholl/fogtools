@@ -564,10 +564,16 @@ class TestNWCSAF:
             assert tisl.call_count == 60
         nwcsaf.is_running.return_value = False
 
-    def test_ensure(self, nwcsaf, ts):
+    def test_ensure(self, nwcsaf, ts, fake_process):
         nwcsaf.wait_for_output = unittest.mock.MagicMock()
+        nwcsaf.is_running = unittest.mock.MagicMock()
+        nwcsaf.start_running = unittest.mock.MagicMock()
+        nwcsaf.is_running.return_value = False
         nwcsaf.ensure(ts)
-        nwcsaf.wait_for_output.assert_called_once_with(ts)
+        nwcsaf.start_running.assert_called_once_with()
+        nwcsaf.is_running.return_value = True
+        nwcsaf.ensure(ts)
+        nwcsaf.start_running.assert_called_once_with()
 
     # concrete methods from parent class
     def test_ensure_deps(self, nwcsaf, abi, icon, ts):
