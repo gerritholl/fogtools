@@ -671,12 +671,11 @@ class _NWCSAF(_CMIC):
         logger.info("Starting NWCSAF software")
         return subprocess.run(["SAFNWCTM"], check=True)
 
-    @staticmethod
-    def _get_dep_loc(dep):
+    def _get_dep_loc(self, dep):
         """Find location from where dependency should be symlinked
 
         The SAFNWC software expects input data to be in a particular directory,
-        but the data may be elsewhere.  This static method determines where
+        but the data may be elsewhere.  This method determines where
         these data are expected by the SAFNWC software.
         """
         p = pathlib.Path(self.base) / "import"

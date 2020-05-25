@@ -477,7 +477,7 @@ class TestICON:
 class TestNWCSAF:
     def test_get_path(self, nwcsaf, ts):
         ps = nwcsaf.get_path(ts)
-        assert ps == [(nwcsaf.base / "1900" / "01" / "01"
+        assert ps == [(nwcsaf.base / "export" / "CMIC"
                       / "S_NWC_CMIC_GOES16_NEW-ENGLAND-NR_"
                       "19000101T000000Z.nc")]
 
@@ -521,24 +521,21 @@ class TestNWCSAF:
         import fogtools.db
         monkeypatch.setenv("SAFNWC", str(tmp_path))
         p = nwcsaf._get_dep_loc(abi)
-        assert p == tmp_path / "import" / "Sat_data"
+        assert p == nwcsaf.base / "import" / "Sat_data"
         p = nwcsaf._get_dep_loc(icon)
-        assert p == tmp_path / "import" / "NWP_data"
+        assert p == nwcsaf.base / "import" / "NWP_data"
         with pytest.raises(TypeError):
             nwcsaf._get_dep_loc(object())
-        monkeypatch.delenv("SAFNWC")
-        with pytest.raises(fogtools.db.FogDBError):
-            nwcsaf._get_dep_loc(abi)
 
     def test_link(self, nwcsaf, abi, icon, ts, monkeypatch, tmp_path):
         monkeypatch.setenv("SAFNWC", str(tmp_path))
         abi._generated[ts] = [tmp_path / "abi" / "abi.nc"]
         nwcsaf.link(abi, ts)
-        exp = tmp_path / "import" / "Sat_data" / "abi.nc"
+        exp = nwcsaf.base / "import" / "Sat_data" / "abi.nc"
         assert exp.is_symlink()
         assert exp.resolve() == tmp_path / "abi" / "abi.nc"
         nwcsaf.link(icon, ts)
-        exp = (tmp_path / "import" / "NWP_data" /
+        exp = (nwcsaf.base / "import" / "NWP_data" /
                "S_NWC_NWP_1900-01-01T00:00:00Z_000.grib")
         assert exp.is_symlink()
         assert (exp.resolve() == icon.base / "import" / "NWP_data" /
