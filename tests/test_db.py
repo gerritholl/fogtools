@@ -276,7 +276,8 @@ class TestABI:
                        "s18993652325000_e18993652340000_"
                        "c19000010020000.nc")
 
-    def _mk(self, abi, old=False, bad=False):
+    @classmethod
+    def _mk(cls, abi, old=False, bad=False):
         """Make some files in abi.base
 
         This should ensure that abi.exists(...) returns True.
@@ -289,7 +290,7 @@ class TestABI:
         - ending 1900-01-01 00:10
         - created 1900-01-01 00:20
         """
-        for f in self._get_fake_paths(abi, old=old, bad=bad):
+        for f in cls._get_fake_paths(abi, old=old, bad=bad):
             f.parent.mkdir(parents=True, exist_ok=True)
             f.touch()
 
@@ -529,18 +530,33 @@ class TestNWCSAF:
             nwcsaf._get_dep_loc(object())
 
     def test_link(self, nwcsaf, abi, icon, ts, monkeypatch, tmp_path):
+        import fogtools.abi
         monkeypatch.setenv("SAFNWC", str(tmp_path))
-        abi._generated[ts] = [tmp_path / "abi" / "abi.nc"]
+        monkeypatch.setattr(fogtools.abi, "nwcsaf_abi_channels", {3})
+        monkeypatch.setattr(fogtools.abi, "fogpy_abi_channels", {3})
+        # this will create a fake ABI file for 18991231T235500
+        TestABI._mk(abi)
+        # ...but then linking should accept 19000101T000000 as covered thereby
         nwcsaf.link(abi, ts)
-        exp = nwcsaf.base / "import" / "Sat_data" / "abi.nc"
+        exp = (nwcsaf.base / "import" / "Sat_data" /
+               "OR_ABI-L1b-RadF-M3C03_G16_"
+               "s18993652355000_e19000010010000_c19000010020000.nc")
         assert exp.is_symlink()
-        assert exp.resolve() == tmp_path / "abi" / "abi.nc"
-        nwcsaf.link(icon, ts)
+        assert exp.resolve() == (abi.base / "abi" / "1899" / "12" / "31" / "23"
+                                 / "C3"
+                                 / "OR_ABI-L1b-RadF-M3C03_G16_"
+                                   "s18993652355000_e19000010010000_"
+                                   "c19000010020000.nc")
+        t2 = pandas.Timestamp("1900-01-01T01:23:45")
+        out = (icon.base / "import" / "NWP_data" /
+               "S_NWC_NWP_1900-01-01T00:00:00Z_001.grib")
+        out.parent.mkdir(exist_ok=True, parents=True)
+        out.touch()
+        nwcsaf.link(icon, t2)
         exp = (nwcsaf.base / "import" / "NWP_data" /
-               "S_NWC_NWP_1900-01-01T00:00:00Z_000.grib")
+               "S_NWC_NWP_1900-01-01T00:00:00Z_001.grib")
         assert exp.is_symlink()
-        assert (exp.resolve() == icon.base / "import" / "NWP_data" /
-                "S_NWC_NWP_1900-01-01T00:00:00Z_000.grib")
+        assert (exp.resolve() == out)
 
     @unittest.mock.patch("time.sleep", autospec=True)
     def test_wait_for_output(self, tisl, nwcsaf, monkeypatch, tmp_path):

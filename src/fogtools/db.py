@@ -690,7 +690,7 @@ class _NWCSAF(_CMIC):
 
     def link(self, dep, timestamp):
         logger.debug("Linking NWCSAF dependenices")
-        link_dsts = dep.get_path(timestamp)
+        link_dsts = dep.exists(timestamp)
         link_src_dir = self._get_dep_loc(dep)
         link_src_dir.mkdir(exist_ok=True, parents=True)
         for p in link_dsts:
@@ -704,7 +704,8 @@ class _NWCSAF(_CMIC):
         if not self.is_running():
             raise FogDBError("SAFNWC is not running")
         t = 0
-        logger.info(f"Waiting for SAFNWC results in {self.base / 'export' / 'cmic'!s}")
+        logger.info("Waiting for SAFNWC results in "
+                    f"{self.base / 'export' / 'cmic'!s}")
         while t < timeout:
             if self.exists(timestamp):
                 return
