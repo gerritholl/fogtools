@@ -529,7 +529,7 @@ class TestNWCSAF:
         with pytest.raises(TypeError):
             nwcsaf._get_dep_loc(object())
 
-    def test_link(self, nwcsaf, abi, icon, ts, monkeypatch, tmp_path):
+    def test_link(self, nwcsaf, abi, icon, ts, monkeypatch, tmp_path, caplog):
         import fogtools.abi
         monkeypatch.setenv("SAFNWC", str(tmp_path))
         monkeypatch.setattr(fogtools.abi, "nwcsaf_abi_channels", {3})
@@ -547,6 +547,11 @@ class TestNWCSAF:
                                  / "OR_ABI-L1b-RadF-M3C03_G16_"
                                    "s18993652355000_e19000010010000_"
                                    "c19000010020000.nc")
+        exp.unlink()
+        exp.touch()
+        with caplog.at_level(logging.WARNING):
+            nwcsaf.link(abi, ts)
+            assert "Src already exists" in caplog.text
         t2 = pandas.Timestamp("1900-01-01T01:23:45")
         out = (icon.base / "import" / "NWP_data" /
                "S_NWC_NWP_1900-01-01T00:00:00Z_001.grib")

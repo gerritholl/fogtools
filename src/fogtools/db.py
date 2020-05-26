@@ -694,7 +694,11 @@ class _NWCSAF(_CMIC):
         link_src_dir = self._get_dep_loc(dep)
         link_src_dir.mkdir(exist_ok=True, parents=True)
         for p in link_dsts:
-            (link_src_dir / p.name).symlink_to(p)
+            src = (link_src_dir / p.name)
+            try:
+                src.symlink_to(p)
+            except FileExistsError:
+                logger.warning(f"Src already exists: {src!s}")
 
     def wait_for_output(self, timestamp, timeout=600):
         """Wait for SAFNWC outputs
