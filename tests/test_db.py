@@ -248,12 +248,6 @@ def test_store(db, fake_df, tmp_path):
 
 
 class TestABI:
-    def test_get_path(self, abi, ts):
-        with pytest.raises(NotImplementedError):
-            abi.get_path(ts)
-        abi._generated[ts] = [pathlib.Path("/banana")]
-        assert abi.get_path(ts) == [pathlib.Path("/banana")]
-
     @staticmethod
     def _get_fake_paths(abi, old=False, bad=False, tp="local"):
         import fogtools.abi
@@ -294,26 +288,26 @@ class TestABI:
             f.parent.mkdir(parents=True, exist_ok=True)
             f.touch()
 
-    def test_exists(self, abi, ts, monkeypatch):
+    def test_find(self, abi, ts, monkeypatch):
         import fogtools.db
         import fogtools.abi
         # this monkeypatching is just to make the tests run faster
         monkeypatch.setattr(fogtools.abi, "nwcsaf_abi_channels", {3})
         monkeypatch.setattr(fogtools.abi, "fogpy_abi_channels", {3})
-        assert not abi.exists(ts)
+        assert not abi.find(ts, complete=True)
         self._mk(abi, old=False)
-        assert abi.exists(ts)
-        assert abi.exists(ts) >= set(self._get_fake_paths(abi, old=False))
-        assert abi.exists(ts + pandas.Timedelta(12, "minutes"))
-        assert not abi.exists(ts, past=True)
-        assert not abi.exists(ts + pandas.Timedelta(2, "hours"))
+        assert abi.find(ts, complete=True)
+        assert abi.find(ts, complete=True) >= set(self._get_fake_paths(abi, old=False))
+        assert abi.find(ts + pandas.Timedelta(12, "minutes"), complete=True)
+        assert not abi.find(ts, past=True, complete=True)
+        assert not abi.find(ts + pandas.Timedelta(2, "hours"), complete=True)
         self._mk(abi, old=True)
-        assert abi.exists(ts, past=True)
+        assert abi.find(ts, past=True, complete=True)
         self._mk(abi, bad=True)
         with pytest.raises(fogtools.db.FogDBError):
-            abi.exists(ts + pandas.Timedelta(12, "minutes"))
+            abi.find(ts + pandas.Timedelta(12, "minutes"), complete=True)
         with pytest.raises(fogtools.db.FogDBError):
-            abi.exists(ts)
+            abi.find(ts, complete=True)
 
     @unittest.mock.patch("s3fs.S3FileSystem", autospec=True)
     def test_store(self, sS, abi, monkeypatch):
@@ -342,7 +336,7 @@ class TestABI:
         assert set(abi._generated[t]) == {pathlib.Path(p) for p in exp_list}
         monkeypatch.setattr(fogtools.abi, "nwcsaf_abi_channels", {2, 3, 4})
         monkeypatch.setattr(fogtools.abi, "fogpy_abi_channels", {2, 3, 4})
-        assert abi.exists(t)
+        assert abi.find(t, complete=True)
 
     @unittest.mock.patch("fogtools.abi.download_abi_period", autospec=True)
     @unittest.mock.patch("satpy.Scene", autospec=True)
@@ -366,7 +360,7 @@ class TestABI:
                 filenames={str(x) for x in
                            _gen_abi_dst(abi, cs={10, 11}, st=t1, ed=t1)},
                 reader="abi_l1b")
-        assert abi.exists(t1)
+        assert abi.find(t1, complete=True)
         # call again now that side effect has occured and files are already
         # present -> different logic, but reset fixture first
         fad.reset_mock()
@@ -415,20 +409,6 @@ class TestABI:
 
 
 class TestICON:
-    def test_get_path(self, icon):
-        t1 = pandas.Timestamp("1900-01-01T00:00:00")
-        t2 = pandas.Timestamp("1900-01-01T04:00:00")
-        t3 = pandas.Timestamp("1900-01-01T09:00:00")
-        t4 = pandas.Timestamp("1900-01-01T09:59:00")
-        t5 = pandas.Timestamp("1900-01-01T11:59:00")
-        fmt = str(icon.base / "import" / "NWP_data" /
-                  "S_NWC_NWP_1900-01-01T{h:>02d}:00:00Z_{i:>03d}.grib")
-        assert icon.get_path(t1) == {pathlib.Path(fmt.format(h=0, i=0))}
-        assert icon.get_path(t2) == {pathlib.Path(fmt.format(h=0, i=4))}
-        assert icon.get_path(t3) == {pathlib.Path(fmt.format(h=6, i=3))}
-        assert icon.get_path(t4) == {pathlib.Path(fmt.format(h=6, i=4))}
-        assert icon.get_path(t5) == {pathlib.Path(fmt.format(h=12, i=0))}
-
     @unittest.mock.patch("fogtools.sky.get_and_send", autospec=True)
     def test_store(self, fsg, icon, ts, tmp_path):
         fsg.return_value = [tmp_path / "pear"]
@@ -436,21 +416,23 @@ class TestICON:
         assert icon._generated[ts] == [tmp_path / "pear"]
 
     # concrete methods from parent class
-    def test_exists(self, icon, ts):
-        t = pandas.Timestamp("1900-01-01T05:00:00")
+    def test_find(self, icon, ts):
+        t1 = pandas.Timestamp("1900-01-01T05:00:00")
+        t2 = pandas.Timestamp("1900-01-01T05:25:00")
         p1 = {icon.base / "import" / "NWP_data" /
               f"S_NWC_NWP_1900-01-01T00:00:00Z_{i:>03d}.grib"
               for i in range(5)}
         for f in p1:
             f.parent.mkdir(parents=True, exist_ok=True)
             f.touch()
-        assert not icon.exists(t)
-        assert icon.exists(t) == set()
+        assert not icon.find(t1, complete=True)
+        assert icon.find(t1, complete=True) == set()
         p2 = (icon.base / "import" / "NWP_data" /
               "S_NWC_NWP_1900-01-01T00:00:00Z_005.grib")
         p2.touch()
-        assert icon.exists(t)
-        assert icon.exists(t) == {p2}
+        assert icon.find(t1, complete=True)
+        assert icon.find(t1, complete=True) == {p2}
+        assert icon.find(t2, complete=True) == {p2}
 
     @unittest.mock.patch("satpy.Scene", autospec=True)
     @unittest.mock.patch("fogtools.sky.send_to_sky", autospec=True)
@@ -471,18 +453,12 @@ class TestICON:
                     icon.base / "import" / "NWP_data" /
                     "S_NWC_NWP_1900-01-01T00:00:00Z_001.grib"},
                 reader="grib")
-        assert icon.exists(t)
+        assert icon.find(t, complete=True)
 
 
 class TestNWCSAF:
     def test_init(self, nwcsaf):
         assert isinstance(nwcsaf.base, pathlib.Path)
-
-    def test_get_path(self, nwcsaf, ts):
-        ps = nwcsaf.get_path(ts)
-        assert ps == [(nwcsaf.base / "export" / "CMIC"
-                      / "S_NWC_CMIC_GOES16_NEW-ENGLAND-NR_"
-                      "19000101T000000Z.nc")]
 
     def test_store(self, nwcsaf, ts):
         nwcsaf.ensure_deps = unittest.mock.MagicMock()
@@ -611,10 +587,10 @@ class TestNWCSAF:
 
 
 class TestSYNOP:
-    def test_get_path(self, synop, monkeypatch, tmp_path):
+    def test_find(self, synop, monkeypatch, tmp_path):
         monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
-        p = synop.get_path(ts)
-        assert p == [tmp_path / "fogtools" / "store.parquet"]
+        p = synop.find(ts, complete=False)
+        assert p == {tmp_path / "fogtools" / "store.parquet"}
 
     @unittest.mock.patch("fogtools.isd.read_db", autospec=True)
     @unittest.mock.patch("fogtools.isd.create_db", autospec=True)
@@ -649,9 +625,9 @@ class TestSYNOP:
 
 
 class TestDEM:
-    def test_get_path(self, dem):
-        p = dem.get_path(object())
-        assert p == pathlib.Path("/media/nas/x21308/DEM/USGS/merged-500.tif")
+    def test_find(self, dem):
+        p = dem.find(object(), complete=False)
+        assert p == {pathlib.Path("/media/nas/x21308/DEM/USGS/merged-500.tif")}
 
     @unittest.mock.patch("urllib.request.urlretrieve", autospec=True)
     @unittest.mock.patch("subprocess.run", autospec=True)
@@ -685,13 +661,12 @@ class TestDEM:
 
 
 class TestFog:
-    def test_get_path(self, fog, ts):
-        p = fog.get_path(ts)
-        assert p == [fog.base / "fog-19000101-0000.tif"]
+    def test_find(self, fog, ts):
+        p = fog.find(ts, complete=False)
+        assert p == {fog.base / "fog-19000101-0000.tif"}
 
     @unittest.mock.patch("satpy.Scene")
     def test_store(self, sS, fog, abi, ts):
-        abi._generated[ts] = [pathlib.Path("/banana")]
         fog.store(ts)
         sS.return_value.resample.return_value.save_dataset\
           .assert_called_once_with(

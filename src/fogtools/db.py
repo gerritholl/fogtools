@@ -221,32 +221,22 @@ class _DB(abc.ABC):
         self._generated = {}
 
     @abc.abstractmethod
-    def get_path(self, timestamp):
-        # sometimes it's one file, sometimes multiple files (such as input
-        # NWCSAF with multiple channels or times), how to handle this?
-        # Always return a collection?
-        # It should probably always return a collection, which probably means I
-        # need the flexibility of reimplementing it in subclasses and I can't
-        # have it all defined from yaml files?
-        raise NotImplementedError()  # pragma: no cover
+    def find(self, timestamp, complete=False):
+        """Return (all) files needed at ``timestamp``.
 
-    def exists(self, timestamp):
-        """Check if all files needed at <timestamp> exist.
+        Check what files cover ``timestamp``.  Return a collection of files
+        found.  If complete is True, return this collection only if all
+        expected files are found, and an empty collection otherwise.
 
-        Check if all files needed at ``timestamp`` exist.  If yes,
-        return a collection of files found.  If not all are found,
-        return False or an empty collection.
+        Args:
+            timestamp (Pandas.Timestamp): Time at which to collect.
+            complete (Optional[bool]): Require completeness.
         """
-
-        all_p = self.get_path(timestamp)
-        for p in all_p:
-            if not p.exists():
-                return set()
-        return all_p
+        raise NotImplementedError()
 
     def ensure(self, timestamp):
         logger.debug(f"Ensuring {self!s} is available")
-        if not self.exists(timestamp):
+        if not self.find(timestamp, complete=True):
             logger.debug("Input data unavailable or incomplete for "
                          f"{self!s} for {timestamp:%Y-%m-%d %H:%M}, "
                          "downloading / generating")
@@ -262,7 +252,7 @@ class _DB(abc.ABC):
         self.ensure(timestamp)
         logger.debug(f"Loading {self!s}")
         sc = satpy.Scene(
-                filenames=self.get_path(timestamp),
+                filenames=self.find(timestamp, complete=True),
                 reader=self.reader)
         sc.load(sc.available_dataset_names())
         return sc
@@ -354,13 +344,6 @@ class _ABI(_Sat):
     reader = "abi_l1b"
     name = "ABI"
 
-    def get_path(self, timestamp):
-        if timestamp in self._generated:
-            return self._generated[timestamp]
-        else:
-            raise NotImplementedError("Cannot calculate path for ABI before "
-                                      "data are available")
-
     def _search_file_two_dirs(self, ts1, ts2, chan):
         """Look through two directories for file covering now
 
@@ -431,8 +414,8 @@ class _ABI(_Sat):
             raise FogDBError(f"Channel {chan:d} found multiple times?! "
                              + ", ".join(str(c) for c in cnt2))
 
-    def exists(self, timestamp, past=False):
-        """Check if files covering  timestamp exist
+    def find(self, timestamp, complete=True, past=False):
+        """Check if files covering timestamp exist
 
         Check if ABI files covering 'timestamp' exist for all channels.
         If ``past`` is True, will also ensure ABI files covering T-60 minutes
@@ -456,6 +439,9 @@ class _ABI(_Sat):
         # In M6 NWCSAF searches T-60, T-20, in M3 it searches T-60, T-30.
         # I'll check that T-60 and T-0 must exist, as well as either T-30 or
         # T-20.
+
+        if not complete:
+            raise NotImplementedError("ABI.find only implemented for complete")
 
         ot = functools.partial(pandas.Timedelta, unit="minutes")
         logger.debug("Checking all required ABI channels at "
@@ -510,7 +496,7 @@ class _ABI(_Sat):
         """Get scene containing relevant ABI channels
         """
         self.ensure(timestamp)
-        selection = self.exists(timestamp)
+        selection = self.find(timestamp, complete=True)
         # I want to select those files where the time matches.  More files may
         # have been downloaded, in particular for the benefit of NWCSAF.  How
         # to do this matching?  Could use pathlib.Path.match or perhaps
@@ -539,7 +525,7 @@ class _ICON(_NWP):
     reader = "grib"
     name = "ICON"
 
-    def get_path(self, timestamp):
+    def find(self, timestamp, complete=False):
         """Get best ICON path for timestamp.
 
         Given a timestamp, get the most suitable ICON path to read.  That's
@@ -563,8 +549,11 @@ class _ICON(_NWP):
             raise ValueError(
                     f"I would expect filename {fn!s}, but I'm told "
                     f"to expect only {','.join([str(f) for f in exp])!s}")
-        # I don't care about the logfiles "ihits" and "info"
-        return {fn}
+        if complete and not fn.exists():
+            return set()
+        else:
+            # I don't care about the logfiles "ihits" and "info"
+            return {fn}
 
     def store(self, timestamp):
         """Get model analysis and forecast for input to NWCSAF
@@ -593,7 +582,7 @@ class _NWCSAF(_CMIC):
             raise FogDBError("Environment variable SAFNWC not set")
         self.base = pathlib.Path(base)
 
-    def exists(self, timestamp):
+    def find(self, timestamp, complete=False):
         before = timestamp - pandas.Timedelta(15, "minutes")
         return satpy.readers.find_files_and_readers(
             before.to_pydatetime().replace(tzinfo=None),
@@ -601,11 +590,6 @@ class _NWCSAF(_CMIC):
             self.base / "export" / "CMIC",
             "nwcsaf-geo",
             missing_ok=True).get("nwcsaf-geo", set())
-
-    def get_path(self, timestamp):
-        return [(self.base / "export" / "CMIC" /
-                 f"S_NWC_CMIC_GOES16_NEW-ENGLAND-NR_"
-                 f"{timestamp:%Y%m%dT%H%M%S}Z.nc")]
 
     def store(self, timestamp):
         """Store NWCSAF output
@@ -690,7 +674,7 @@ class _NWCSAF(_CMIC):
 
     def link(self, dep, timestamp):
         logger.debug("Linking NWCSAF dependenices")
-        link_dsts = dep.exists(timestamp)
+        link_dsts = dep.find(timestamp, complete=True)
         link_src_dir = self._get_dep_loc(dep)
         link_src_dir.mkdir(exist_ok=True, parents=True)
         for p in link_dsts:
@@ -711,7 +695,7 @@ class _NWCSAF(_CMIC):
         logger.info("Waiting for SAFNWC results in "
                     f"{self.base / 'export' / 'cmic'!s}")
         while t < timeout:
-            if self.exists(timestamp):
+            if self.find(timestamp, complete=True):
                 return
             time.sleep(10)
             t += 10
@@ -736,8 +720,12 @@ class _SYNOP(_Ground):
     reader = None  # cannot be read with Satpy
     name = "SYNOP/ISD"
 
-    def get_path(self, timestamp):
-        return [isd.get_db_location()]
+    def find(self, timestamp, complete=False):
+        loc = isd.get_db_location()
+        if complete and not loc.exists():
+            return set()
+        else:
+            return {loc}
 
     _db = None
 
@@ -789,8 +777,11 @@ class _DEM(_DB):
         """
         self.location = getattr(self, "dem_" + region.replace("-", "_"))
 
-    def get_path(self, _):
-        return self.location
+    def find(self, timestamp, complete=False):
+        if complete and not self.location.exists():
+            return set()
+        else:
+            return {self.location}
 
     def store(self, _):
         if self.location == self.dem_new_england:
@@ -821,19 +812,23 @@ class _Fog(_DB):
     reader = "generic_image"  # stored as geotiff
     name = "Fogpy"
 
-    def get_path(self, timestamp, sensorreader="nwcsaf-geo"):
-        return [self.base / f"fog-{timestamp:%Y%m%d-%H%M}.tif"]
+    def find(self, timestamp, complete=False, sensorreader="nwcsaf-geo"):
+        b = self.base / f"fog-{timestamp:%Y%m%d-%H%M}.tif"
+        if complete and not b.exists():
+            return set()
+        else:
+            return {b}
 
     def store(self, timestamp):
         logger.info("Calculating fog")
         sc = core.get_fog(
                 "abi_l1b",
-                self.dependencies["sat"].get_path(timestamp),
+                self.dependencies["sat"].find(timestamp),
                 "nwcsaf-geo",
-                self.dependencies["cmic"].get_path(timestamp),
+                self.dependencies["cmic"].find(timestamp),
                 "new-england-500",
                 "overview")
-        sc.save_dataset("fls_day", self.get_path(timestamp)[0])
+        sc.save_dataset("fls_day", self.find(timestamp).pop())
 
 
 # TODO: _IFS, _COSMO, _METAR, _SWIS
