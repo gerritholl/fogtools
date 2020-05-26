@@ -704,7 +704,7 @@ class _NWCSAF(_CMIC):
         if not self.is_running():
             raise FogDBError("SAFNWC is not running")
         t = 0
-        logger.info(f"Waiting for SAFNWC results in {self.base!s}")
+        logger.info(f"Waiting for SAFNWC results in {self.base / 'export' / 'cmic'!s}")
         while t < timeout:
             if self.exists(timestamp):
                 return
@@ -714,8 +714,12 @@ class _NWCSAF(_CMIC):
             raise FogDBError(f"No SAFNWC result after {timeout:d} s")
 
     def ensure(self, timestamp):
-        if not self.is_running():
-            self.start_running()
+        """Ensure that NWCSAF output for timestamp exists.
+
+        Generate NWCSAF output (using self.store) and wait for results.
+        To generate without waiting, call self.store.
+        """
+        self.store(timestamp)
         self.wait_for_output(timestamp)
 
 

@@ -567,9 +567,11 @@ class TestNWCSAF:
         nwcsaf.wait_for_output = unittest.mock.MagicMock()
         nwcsaf.is_running = unittest.mock.MagicMock()
         nwcsaf.start_running = unittest.mock.MagicMock()
+        nwcsaf.ensure_deps = unittest.mock.MagicMock()
         nwcsaf.is_running.return_value = False
         nwcsaf.ensure(ts)
         nwcsaf.start_running.assert_called_once_with()
+        nwcsaf.ensure_deps.assert_called_once_with(ts)
         nwcsaf.is_running.return_value = True
         nwcsaf.ensure(ts)
         nwcsaf.start_running.assert_called_once_with()
