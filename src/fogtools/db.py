@@ -792,9 +792,9 @@ class _DEM(_DB):
                         f"etc/composites/{self._regions[region]:s}.yaml"),
                     "r"),
                 Loader=yaml.loader.UnsafeLoader)
-        self.location = pkg_resources.resource_filename(
+        self.location = pathlib.Path(pkg_resources.resource_filename(
                 "fogpy",
-                D["composites"]["_intermediate_fls_day"]["path_dem"])
+                D["composites"]["_intermediate_fls_day"]["path_dem"]))
 
     def find(self, timestamp, complete=False):
         if complete and not self.location.exists():

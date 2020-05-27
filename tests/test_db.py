@@ -634,8 +634,8 @@ class TestDEM:
     def test_find(self, dem):
         import pkg_resources
         p = dem.find(object(), complete=False)
-        assert p == {pkg_resources.resource_filename(
-            "fogpy", "data/DEM/new-england-500m.tif")}
+        assert p == {pathlib.Path(pkg_resources.resource_filename(
+            "fogpy", "data/DEM/new-england-500m.tif"))}
 
     @unittest.mock.patch("urllib.request.urlretrieve", autospec=True)
     @unittest.mock.patch("subprocess.run", autospec=True)
