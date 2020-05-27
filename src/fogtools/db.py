@@ -308,6 +308,13 @@ class _DB(abc.ABC):
         # https://pytroll.slack.com/archives/C17CEU728/p1589903078309800 and
         # onward conversation
         for da in sc:
+            if "area" not in da.attrs:
+                logger.debug(
+                        "Not extracting from "
+                        f"{da.attrs.get('name', getattr(da, 'name'))!s}, "
+                        "as it doesn't have an area attribute, probably "
+                        "a non-geographical dataset.")
+                continue
             (x, y) = da.attrs["area"].get_xy_from_lonlat(
                     numpy.array(lons),
                     numpy.array(lats))
@@ -318,8 +325,8 @@ class _DB(abc.ABC):
             except AttributeError:
                 src = da.data
             extr = src[
-                numpy.where(x.mask, 0, x),
-                numpy.where(y.mask, 0, y)]
+                numpy.where(x.mask, 0, y),
+                numpy.where(y.mask, 0, x)]
             vals[da.attrs["name"]] = numpy.where(
                     x.mask | y.mask,
                     numpy.nan,
@@ -831,4 +838,4 @@ class _Fog(_DB):
         sc.save_dataset("fls_day", self.find(timestamp).pop())
 
 
-# TODO: _IFS, _COSMO, _METAR, _SWIS
+# TODO: _IFS, _COSMO, _METAR, _SWIS, _SEVIRI

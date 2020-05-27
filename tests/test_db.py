@@ -64,6 +64,9 @@ def fakescene():
             numpy.arange(25).reshape(5, 5),
             attrs={"area": unittest.mock.MagicMock(),
                    "name": "cloudberry"})
+    sc["cloudberry_pal"] = xarray.DataArray(
+            numpy.arange(25).reshape(5, 5),
+            attrs={"name": "cloudberry_pal"})
     sc["raspberry"].attrs["area"].get_xy_from_lonlat.return_value = (
             numpy.ma.masked_array(
                 numpy.array([1, 1]),
@@ -297,7 +300,8 @@ class TestABI:
         assert not abi.find(ts, complete=True)
         self._mk(abi, old=False)
         assert abi.find(ts, complete=True)
-        assert abi.find(ts, complete=True) >= set(self._get_fake_paths(abi, old=False))
+        assert abi.find(ts, complete=True) >= set(
+                self._get_fake_paths(abi, old=False))
         assert abi.find(ts + pandas.Timedelta(12, "minutes"), complete=True)
         assert not abi.find(ts, past=True, complete=True)
         assert not abi.find(ts + pandas.Timedelta(2, "hours"), complete=True)
@@ -387,15 +391,17 @@ class TestABI:
     def test_link(self, abi, ts):
         abi.link(None, None)  # this doesn't do anything
 
-    def test_extract(self, abi, ts, fakescene):
+    def test_extract(self, abi, ts, fakescene, caplog):
         abi.load = unittest.mock.MagicMock()
         abi.load.return_value = fakescene
-        df = abi.extract(ts, numpy.array([10, 10]), numpy.array([10, 15]))
+        with caplog.at_level(logging.DEBUG):
+            df = abi.extract(ts, numpy.array([10, 10]), numpy.array([10, 15]))
+            assert "Not extracting from cloudberry_pal" in caplog.text
         numpy.testing.assert_array_equal(
                 df.columns,
                 ["raspberry", "cloudberry"])
-        numpy.testing.assert_array_equal(df["raspberry"], [6, 7])
-        numpy.testing.assert_array_equal(df["cloudberry"], [12, 13])
+        numpy.testing.assert_array_equal(df["raspberry"], [6, 11])
+        numpy.testing.assert_array_equal(df["cloudberry"], [12, 17])
         numpy.testing.assert_array_equal(
                 df.index.get_level_values("LATITUDE"), [10, 10])
         numpy.testing.assert_array_equal(
