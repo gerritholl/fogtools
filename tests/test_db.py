@@ -632,8 +632,10 @@ class TestSYNOP:
 
 class TestDEM:
     def test_find(self, dem):
+        import pkg_resources
         p = dem.find(object(), complete=False)
-        assert p == {pathlib.Path("/media/nas/x21308/DEM/USGS/merged-500.tif")}
+        assert p == {pkg_resources.resource_filename(
+            "fogpy", "data/DEM/new-england-500m.tif")}
 
     @unittest.mock.patch("urllib.request.urlretrieve", autospec=True)
     @unittest.mock.patch("subprocess.run", autospec=True)

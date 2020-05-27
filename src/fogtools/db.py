@@ -16,11 +16,14 @@ import pathlib
 import functools
 import collections
 import abc
+import pkg_resources
 
 import numpy
 import pandas
 import satpy
 import satpy.readers
+import yaml
+import yaml.loader
 
 import sattools.io
 
@@ -770,8 +773,7 @@ class _DEM(_DB):
     reader = "generic_image"
     name = "DEM"
 
-    dem_new_england = pathlib.Path("/media/nas/x21308/DEM/USGS/merged-500.tif")
-    dem_europe = pathlib.Path("/media/nas/x21308/DEM/dem_eu_1km.tif")
+    _regions = {"new-england": "abi", "europe": "seviri"}
     location = None
 
     def __init__(self, region):
@@ -782,7 +784,17 @@ class _DEM(_DB):
         Args:
             region (str): Either "new-england" or "europe"
         """
-        self.location = getattr(self, "dem_" + region.replace("-", "_"))
+
+        D = yaml.load(
+                open(
+                    pkg_resources.resource_filename(
+                        "fogpy",
+                        f"etc/composites/{self._regions[region]:s}.yaml"),
+                    "r"),
+                Loader=yaml.loader.UnsafeLoader)
+        self.location = pkg_resources.resource_filename(
+                "fogpy",
+                D["composites"]["_intermediate_fls_day"]["path_dem"])
 
     def find(self, timestamp, complete=False):
         if complete and not self.location.exists():
