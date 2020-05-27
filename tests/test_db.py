@@ -58,15 +58,23 @@ def fakescene():
     sc = satpy.Scene()
     sc["raspberry"] = xarray.DataArray(
             numpy.arange(25).reshape(5, 5),
+            dims=("x", "y"),
             attrs={"area": unittest.mock.MagicMock(),
                    "name": "raspberry"})
     sc["cloudberry"] = xarray.DataArray(
             numpy.arange(25).reshape(5, 5),
+            dims=("x", "y"),
             attrs={"area": unittest.mock.MagicMock(),
                    "name": "cloudberry"})
     sc["cloudberry_pal"] = xarray.DataArray(
             numpy.arange(25).reshape(5, 5),
+            dims=("color_a", "color_b"),
             attrs={"name": "cloudberry_pal"})
+    sc["banana"] = xarray.DataArray(
+            numpy.arange(25).reshape(1, 5, 5),
+            dims=("t", "x", "y"),
+            attrs={"area": unittest.mock.MagicMock(),
+                   "name": "banana"})
     sc["raspberry"].attrs["area"].get_xy_from_lonlat.return_value = (
             numpy.ma.masked_array(
                 numpy.array([1, 1]),
@@ -74,13 +82,14 @@ def fakescene():
             numpy.ma.masked_array(
                 numpy.array([1, 2]),
                 [False, False]))
-    sc["cloudberry"].attrs["area"].get_xy_from_lonlat.return_value = (
-            numpy.ma.masked_array(
-                numpy.array([2, 2]),
-                [False, False]),
-            numpy.ma.masked_array(
-                numpy.array([2, 3]),
-                [False, False]))
+    for nm in ("banana", "cloudberry"):
+        sc[nm].attrs["area"].get_xy_from_lonlat.return_value = (
+                numpy.ma.masked_array(
+                    numpy.array([2, 2]),
+                    [False, False]),
+                numpy.ma.masked_array(
+                    numpy.array([2, 3]),
+                    [False, False]))
     return sc
 
 
@@ -91,10 +100,12 @@ def _mk_fakescene_realarea(fakearea, *names):
     for name in names:
         sc[name] = xarray.DataArray(
                 da.arange(25).reshape(5, 5),
+                dims=("x", "y"),
                 attrs={"area": fakearea,
                        "name": name})
         sc[name] = xarray.DataArray(
                 da.arange(25).reshape(5, 5),
+                dims=("x", "y"),
                 attrs={"area": fakearea,
                        "name": name})
     return sc
@@ -200,8 +211,7 @@ def test_init(db):
     assert db.fog is not None
 
 
-def test_extend(db, abi, icon, nwcsaf, fake_df, ts, caplog, fakearea,
-                fake_process):
+def test_extend(db, abi, icon, nwcsaf, fake_df, ts, caplog, fakearea):
     # TODO: rewrite test with less mocking
     #
     # function is probably mocking too much, the test passes but it fails in
@@ -399,7 +409,7 @@ class TestABI:
             assert "Not extracting from cloudberry_pal" in caplog.text
         numpy.testing.assert_array_equal(
                 df.columns,
-                ["raspberry", "cloudberry"])
+                ["raspberry", "cloudberry", "banana"])
         numpy.testing.assert_array_equal(df["raspberry"], [6, 11])
         numpy.testing.assert_array_equal(df["cloudberry"], [12, 17])
         numpy.testing.assert_array_equal(

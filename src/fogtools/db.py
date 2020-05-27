@@ -311,13 +311,21 @@ class _DB(abc.ABC):
         # https://pytroll.slack.com/archives/C17CEU728/p1589903078309800 and
         # onward conversation
         for da in sc:
+            nm = f"{da.attrs.get('name', getattr(da, 'name'))!s}"
             if "area" not in da.attrs:
                 logger.debug(
-                        "Not extracting from "
-                        f"{da.attrs.get('name', getattr(da, 'name'))!s}, "
+                        f"Not extracting from {nm:s}, "
                         "as it doesn't have an area attribute, probably "
                         "a non-geographical dataset.")
                 continue
+            if any(d not in da.dims for d in "xy"):
+                logger.debug(
+                        f"Not extracting from {nm:s}, "
+                        "as it doesn't have both x and y dimensions. "
+                        "It has: " + ",".join(da.dims))
+                continue
+            for d in set(da.dims) - {"x", "y"}:
+                da = da.squeeze(d)
             (x, y) = da.attrs["area"].get_xy_from_lonlat(
                     numpy.array(lons),
                     numpy.array(lats))
