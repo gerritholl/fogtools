@@ -688,4 +688,4 @@ class TestFog:
         fog.store(ts)
         sS.return_value.resample.return_value.save_dataset\
           .assert_called_once_with(
-                   "fls_day", fog.base / "fog-19000101-0000.tif")
+                   "fls_day", str(fog.base / "fog-19000101-0000.tif"))

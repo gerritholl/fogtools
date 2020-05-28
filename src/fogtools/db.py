@@ -855,7 +855,7 @@ class _Fog(_DB):
                 self.dependencies["cmic"].find(timestamp),
                 "new-england-500",
                 "overview")
-        sc.save_dataset("fls_day", self.find(timestamp).pop())
+        sc.save_dataset("fls_day", str(self.find(timestamp).pop()))
 
 
 # TODO: _IFS, _COSMO, _METAR, _SWIS, _SEVIRI
