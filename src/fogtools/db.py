@@ -167,8 +167,13 @@ class FogDB:
         # FIXME: rename some fields?
         # FIXME: this needs a tolerance on the time, perhaps lat/lon too
         logger.info("Collected all fogdb components, putting it all together")
-        df = pandas.concat([synop, satdata, nwpdata, cmicdata, demdata,
-                            fogdata], axis=1)
+        df = _concat_mi_df_with_date(
+                satdata,
+                synop=synop,
+                nwp=nwpdata,
+                cmic=cmicdata,
+                dem=demdata,
+                fog=fogdata)
         if self.data is None:
             self.data = df
         else:
@@ -181,6 +186,26 @@ class FogDB:
             raise ValueError("No entries in database!")
         logger.info(f"Storing fog database to {f!s}")
         self.data.to_parquet(f)
+
+
+def _concat_mi_df_with_date(df1, **dfs):
+    """Concatenate multiple multi-index dataframes setting date.
+
+    Having multiple dataframes with a [DATE, LATITUDE, LONGITUDE] MultiIndex,
+    concatenate them column-wise, but taking the dates from the very first
+    dataframe (lat/lon are still required to match).  The main dataframe
+    dictates the dates for the others and is passed first, the rest are passed
+    as keyword arguments (because we need their names to rename the dates).
+
+    If lat and lon don't match, this will fail.
+    """
+    dfc = pandas.concat(
+            [df1.reset_index("DATE")] +
+            [df.reset_index("DATE").rename(columns={"DATE": f"date_{k:s}"})
+                for (k, df) in dfs.items()],
+            axis=1)
+    return dfc.reset_index(["LATITUDE", "LONGITUDE"]).set_index(
+            ["DATE", "LATITUDE", "LONGITUDE"])
 
 
 class _DB(abc.ABC):
@@ -338,15 +363,15 @@ class _DB(abc.ABC):
             extr = src[
                 numpy.where(x.mask, 0, y),
                 numpy.where(y.mask, 0, x)]
-            vals[da.attrs["name"]] = numpy.where(
-                    x.mask | y.mask,
-                    numpy.nan,
-                    extr)
-        return pandas.DataFrame(
-                vals,
-                index=pandas.MultiIndex.from_arrays(
-                    [pandas.Series(timestamp).repeat(lats.size), lats, lons],
-                    names=["DATE", "LATITUDE", "LONGITUDE"]))
+            vals[da.attrs["name"]] = pandas.Series(
+                    numpy.where(x.mask | y.mask, numpy.nan, extr),
+                    index=pandas.MultiIndex.from_arrays(
+                        [pandas.Series(da.attrs["start_time"]).repeat(
+                            lats.size),
+                         lats, lons],
+                        names=["DATE", "LATITUDE", "LONGITUDE"]))
+        df = pandas.DataFrame(vals)
+        return df
 
     def __str__(self):
         return f"[fogdb component {self.name:s}]"

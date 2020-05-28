@@ -11,6 +11,7 @@ import pandas
 import pytest
 import xarray
 import satpy
+import datetime
 
 
 # TODO:
@@ -55,25 +56,30 @@ def fakescene():
     # should I mock get_xy_from_lonlat here?  Probably as it's an external
     # dependency that I can assume to be correct, and it simplifies the
     # unit test here.
+    st_tm = datetime.datetime(1899, 12, 31, 23, 55)
     sc = satpy.Scene()
     sc["raspberry"] = xarray.DataArray(
             numpy.arange(25).reshape(5, 5),
             dims=("x", "y"),
             attrs={"area": unittest.mock.MagicMock(),
+                   "start_time": st_tm,
                    "name": "raspberry"})
     sc["cloudberry"] = xarray.DataArray(
             numpy.arange(25).reshape(5, 5),
             dims=("x", "y"),
             attrs={"area": unittest.mock.MagicMock(),
+                   "start_time": st_tm,
                    "name": "cloudberry"})
     sc["cloudberry_pal"] = xarray.DataArray(
             numpy.arange(25).reshape(5, 5),
             dims=("color_a", "color_b"),
-            attrs={"name": "cloudberry_pal"})
+            attrs={"name": "cloudberry_pal",
+                   "start_time": st_tm})
     sc["banana"] = xarray.DataArray(
             numpy.arange(25).reshape(1, 5, 5),
             dims=("t", "x", "y"),
             attrs={"area": unittest.mock.MagicMock(),
+                   "start_time": st_tm,
                    "name": "banana"})
     sc["raspberry"].attrs["area"].get_xy_from_lonlat.return_value = (
             numpy.ma.masked_array(
@@ -93,7 +99,7 @@ def fakescene():
     return sc
 
 
-def _mk_fakescene_realarea(fakearea, *names):
+def _mk_fakescene_realarea(fakearea, st_tm, *names):
     """Return a fake scene with real fake areas."""
     import dask.array as da
     sc = satpy.Scene()
@@ -102,11 +108,13 @@ def _mk_fakescene_realarea(fakearea, *names):
                 da.arange(25).reshape(5, 5),
                 dims=("x", "y"),
                 attrs={"area": fakearea,
+                       "start_time": st_tm,
                        "name": name})
         sc[name] = xarray.DataArray(
                 da.arange(25).reshape(5, 5),
                 dims=("x", "y"),
                 attrs={"area": fakearea,
+                       "start_time": st_tm,
                        "name": name})
     return sc
 
@@ -221,36 +229,47 @@ def test_extend(db, abi, icon, nwcsaf, fake_df, ts, caplog, fakearea):
     db.sat = abi
     db.sat.load = unittest.mock.MagicMock()
     db.sat.load.return_value = _mk_fakescene_realarea(
-            fakearea, "raspberry", "banana")
+            fakearea,
+            datetime.datetime(1899, 12, 31, 23, 55),
+            "raspberry", "banana")
     db.nwp = icon
     db.nwp.load = unittest.mock.MagicMock()
     db.nwp.load.return_value = _mk_fakescene_realarea(
-            fakearea, "apricot", "pineapple")
-    db.cmic = unittest.mock.MagicMock()
-    db.dem = unittest.mock.MagicMock()
-    db.fog = unittest.mock.MagicMock()
+            fakearea,
+            datetime.datetime(1899, 12, 31, 23, 0),
+            "apricot", "pineapple")
+    db.cmic.load = unittest.mock.MagicMock()
+    db.cmic.load.return_value = _mk_fakescene_realarea(
+            fakearea,
+            datetime.datetime(1899, 12, 31, 23, 55),
+            "peach", "redcurrant")
+    db.dem.load = unittest.mock.MagicMock()
+    db.dem.load.return_value = _mk_fakescene_realarea(
+            fakearea,
+            numpy.datetime64("NaT"),
+            "damson", "prune")
+    db.fog.load = unittest.mock.MagicMock()
+    db.fog.load.return_value = _mk_fakescene_realarea(
+            fakearea,
+            datetime.datetime(1899, 12, 31, 23, 55),
+            "aubergine", "shallot")
     loc = fogtools.isd.get_db_location()
     loc.parent.mkdir(parents=True)
     fake_df.to_parquet(fogtools.isd.get_db_location())
-    gd = db.ground.load(ts)
-    db.cmic.extract.return_value = _mkdf(gd.index, "peach", "redcurrant")
-    db.dem.extract.return_value = _mkdf(gd.index, "damson", "prune")
-    db.fog.extract.return_value = _mkdf(gd.index, "aubergine", "shallot")
+    db.ground.load(ts)
     with caplog.at_level(logging.INFO):
         db.extend(ts)
         assert "Loading data for 1900-01-01 00:00:00" in caplog.text
         # assert "Extracting data for [fogdb component ABI]
         # 1900-01-01 00:00:00" in caplog.text
     assert sorted(db.data.columns) == [
-            "apricot", "aubergine", "banana", "damson", "peach",
+            "apricot", "aubergine", "banana", "damson", "date_cmic",
+            "date_dem", "date_fog", "date_nwp", "date_synop", "peach",
             "pineapple", "prune", "raspberry", "redcurrant", "shallot",
             "values"]
-    assert db.data.shape == (9, 11)
-    db.fog.extract.return_value = _mkdf(gd.index[:3], "aubergine", "shallot")
+    assert db.data.shape == (5, 16)
     db.extend(ts)
-    assert db.data.shape == (18, 11)
-    # TODO: this needs to test tolerances too, and now it has nans, will that
-    # happen in the real world?  Perhaps.
+    assert db.data.shape == (10, 16)
 
 
 def test_store(db, fake_df, tmp_path):
@@ -404,6 +423,7 @@ class TestABI:
     def test_extract(self, abi, ts, fakescene, caplog):
         abi.load = unittest.mock.MagicMock()
         abi.load.return_value = fakescene
+        pt = pandas.Timestamp("1899-12-31T23:55")
         with caplog.at_level(logging.DEBUG):
             df = abi.extract(ts, numpy.array([10, 10]), numpy.array([10, 15]))
             assert "Not extracting from cloudberry_pal" in caplog.text
@@ -418,7 +438,7 @@ class TestABI:
                 df.index.get_level_values("LONGITUDE"), [10, 15])
         numpy.testing.assert_array_equal(
                 df.index.get_level_values("DATE"),
-                pandas.DatetimeIndex([ts, ts]))
+                pandas.DatetimeIndex([pt, pt]))
 
     def test_str(self, abi):
         assert str(abi) == "[fogdb component ABI]"
@@ -689,3 +709,48 @@ class TestFog:
         sS.return_value.resample.return_value.save_dataset\
           .assert_called_once_with(
                    "fls_day", str(fog.base / "fog-19000101-0000.tif"))
+
+
+def test_contact_mi_dfs():
+    from fogtools.db import _concat_mi_df_with_date
+    mix1 = pandas.MultiIndex.from_arrays(
+            [pandas.DatetimeIndex(
+                ["1899-12-31T23:50:00"]*5 +
+                ["1900-01-01T00:10:00"]*5),
+             numpy.linspace(-90, 90, 10),
+             numpy.linspace(-180, 180, 10)],
+            names=["DATE", "LATITUDE", "LONGITUDE"])
+    mix2 = pandas.MultiIndex.from_arrays(
+            [pandas.DatetimeIndex(
+                ["1899-12-31T23:55:00"]*5 +
+                ["1900-01-01T00:05:00"]*5),
+             numpy.linspace(-90, 90, 10),
+             numpy.linspace(-180, 180, 10)],
+            names=["DATE", "LATITUDE", "LONGITUDE"])
+    mix3 = pandas.MultiIndex.from_arrays(
+            [pandas.DatetimeIndex(
+                ["1899-12-31T23:58:00"]*5 +
+                ["1900-01-01T00:02:00"]*5),
+             numpy.linspace(-90, 90, 10),
+             numpy.linspace(-180, 180, 10)],
+            names=["DATE", "LATITUDE", "LONGITUDE"])
+    df1 = pandas.DataFrame(
+            {"aubergine": numpy.arange(10),
+             "banana": numpy.arange(10)/10},
+            index=mix1)
+    df2 = pandas.DataFrame(
+            {"raspberry": numpy.arange(10)*2,
+             "strawberry": numpy.arange(10)/5},
+            index=mix2)
+    df3 = pandas.DataFrame(
+            {"coconut": numpy.arange(10)/2,
+             "walnut": numpy.arange(10)*10},
+            index=mix3)
+    dfm = _concat_mi_df_with_date(df1, df2=df2, df3=df3)
+    assert dfm.index.nlevels == 3
+    assert dfm.index.names == ["DATE", "LATITUDE", "LONGITUDE"]
+    numpy.testing.assert_array_equal(
+            dfm.columns,
+            ["aubergine", "banana", "date_df2", "raspberry", "strawberry",
+             "date_df3", "coconut", "walnut"])
+    assert dfm.shape == (10, 8)
