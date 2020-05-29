@@ -138,10 +138,10 @@ def test_get_station():
 
 
 @mock.patch("pandas.read_parquet", autospec=True)
-def test_read_db(pr, db):
+def test_read_db(pr, gb_db):
     from fogtools.isd import read_db
-    pr.return_value = db
-    db = read_db("/tmp/tofu")
+    pr.return_value = gb_db
+    read_db("/tmp/tofu")
     pr.assert_called_once_with("/tmp/tofu")
 
 

@@ -34,7 +34,10 @@ def get_parser():
 
 
 def dlabi(dt, chans, tp):
-    abi.download_abi_day(dt, chans, tp)
+    abi.download_abi_period(
+            dt.floor("D"),
+            (dt + pandas.Timedelta(1, "day")).floor("D"),
+            chans, tp)
 
 
 def main():

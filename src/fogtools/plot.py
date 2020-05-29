@@ -15,7 +15,7 @@ class Visualiser:
         self.df = isd.read_db()
 
     def plot_fog_frequency(self, name="fogs_per_day"):
-        logger.debug(f"Plotting fog frequency histograms")
+        logger.debug("Plotting fog frequency histograms")
         (f, a) = matplotlib.pyplot.subplots()
         for i in [250, 500, 750, 1000]:
             cnt = isd.count_fogs_per_day(self.df, i)
@@ -44,7 +44,7 @@ class Visualiser:
         the difference between temperature and dewpoint
         """
 
-        logger.debug(f"Plotting fog-dT joint histogram")
+        logger.debug("Plotting fog-dT joint histogram")
         (f, a) = matplotlib.pyplot.subplots()
         m = a.hexbin(
                 self.df["vis"],

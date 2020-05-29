@@ -82,6 +82,7 @@ def get_out_dir(lat, lon, basedir_out):
 
 
 def dl_usgs_dem(lat, lon, out_dir, overwrite=False):
+    out_all = []
     for src_uri in get_src_uris(lat, lon):
         fn = src_uri.split("/")[-1]
         out = out_dir / fn
@@ -96,18 +97,22 @@ def dl_usgs_dem(lat, lon, out_dir, overwrite=False):
                          f"{src_uri!s} to {out!s}, deleting partial file")
             out.unlink(missing_ok=True)
             raise
+        else:
+            out_all.append(out)
+    return out_all
 
 
 def dl_usgs_dem_in_range(lat_from, lat_to, lon_from, lon_to, basedir_out):
     """Download all USGS 1-arc-second TIFF and metadata
     """
 
+    out_all = []
     for lat in range(lat_from, lat_to):
         for lon in range(lon_from, lon_to):
             out_dir = get_out_dir(lat, lon, basedir_out)
             out_dir.mkdir(parents=True, exist_ok=True)
             try:
-                dl_usgs_dem(lat, lon, out_dir)
+                out_all.extend(dl_usgs_dem(lat, lon, out_dir))
             except urllib.error.HTTPError as err:
                 logger.error(f"Could not download for {lat:d}, {lon:d}: " +
                              f"Error {err.code:d}: {err.reason:s}")
@@ -116,3 +121,4 @@ def dl_usgs_dem_in_range(lat_from, lat_to, lon_from, lon_to, basedir_out):
                 except OSError as oerr:
                     if oerr.errno != errno.ENOTEMPTY:
                         raise
+    return out_all

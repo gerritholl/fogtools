@@ -7,7 +7,8 @@ import trollimage.xrimage
 import trollimage.colormap
 
 import xarray
-import sattools.ptc
+
+from . import core
 
 
 def blend_fog(sc, other="overview"):
@@ -63,29 +64,8 @@ def get_fog_blend_for_sat(sensor_reader, sensor_files,
             all its dependencies.
 
     """
-    sc = satpy.Scene(
-        filenames={sensor_reader: sensor_files,
-                   cloud_reader: cloud_files})
-
-    chans = {"seviri_l1b_hrit": ["IR_108", "IR_087", "IR_016", "VIS006",
-                                 "IR_120", "VIS008", "IR_039"],
-             "abi_l1b": ["C02", "C03", "C05", "C07", "C11", "C14", "C15"]}
-    cmic = {"nwcsaf-geo": ["cmic_reff", "cmic_lwp", "cmic_cot"],
-            "cmsaf-claas2_l2_nc": ["reff", "cwp", "cot"]}
-
-    sensor = sensor_reader.split("_")[0]
-    sattools.ptc.add_all_pkg_comps_mods(sc, ["satpy", "fogpy"],
-                                        sensors=[sensor])
-    areas = {}
-    for pkg in ["satpy", "fcitools", "fogtools"]:
-        try:
-            areas.update(sattools.ptc.get_all_areas([pkg]))
-        except ModuleNotFoundError:
-            pass
-    sc.load(chans[sensor_reader] + cmic[cloud_reader] + ["overview"],
-            unload=False)
-    ls = sc.resample(areas[area], unload=False)
-    ls.load(["fls_day", "fls_day_extra"], unload=False)
-
-    blend = blend_fog(ls, blend_background)
-    return (blend, ls)
+    sc = core.get_fog(sensor_reader, sensor_files,
+                      cloud_reader, cloud_files,
+                      area, blend_background)
+    blend = blend_fog(sc, blend_background)
+    return (blend, sc)

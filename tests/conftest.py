@@ -25,7 +25,7 @@ csv_db_test_content = """,STATION,DATE,LATITUDE,LONGITUDE,ELEVATION,NAME,vis,tem
 
 
 @pytest.fixture
-def db():
+def gb_db():
     with io.StringIO(csv_db_test_content) as f:
         return pandas.read_csv(f, parse_dates=["DATE"])
 
@@ -51,4 +51,6 @@ def tmpenv(monkeypatch, tmp_path):
 
 @pytest.fixture(scope="session", autouse=True)
 def setUp(tmp_path_factory):
-    os.environ["XDG_CACHE_HOME"] = str(tmp_path_factory.mktemp("scratch"))
+    os.environ["XDG_CACHE_HOME"] = str(
+            tmp_path_factory.mktemp("xdg_cache_home"))
+    os.environ["SAFNWC"] = str(tmp_path_factory.mktemp("safnwc"))

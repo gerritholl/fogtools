@@ -3,10 +3,10 @@ import pytest
 
 
 @pytest.fixture
-def v(db):
+def v(gb_db):
     from fogtools.plot import Visualiser
     with mock.patch("fogtools.isd.read_db") as fir:
-        fir.return_value = db
+        fir.return_value = gb_db
         vi = Visualiser()
     return vi
 

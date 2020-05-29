@@ -77,20 +77,20 @@ def test_dl_usgs_dem(uru, b, tmpdir, caplog):
 
 
 @unittest.mock.patch("urllib.request.urlretrieve", autospec=True)
-def test_dl_usgs_dem_in_range(uru, b, tmpdir):
+def test_dl_usgs_dem_in_range(uru, b, tmp_path):
     from fogtools.dem import dl_usgs_dem_in_range
-    ptd = pathlib.Path(tmpdir)
-    dl_usgs_dem_in_range(-2, 2, -2, 2, ptd)
+    out_all = dl_usgs_dem_in_range(-2, 2, -2, 2, tmp_path)
     assert uru.call_count == 4*4*4
-    assert (ptd / "n01e001").exists()
-    assert (ptd / "n01e001").is_dir()
+    assert (tmp_path / "n01e001").exists()
+    assert (tmp_path / "n01e001").is_dir()
+    assert (tmp_path / "n01e001" / "USGS_1_n01e001.tif") in out_all
     uru.assert_has_calls([
         unittest.mock.call(
             b + "n01e001/n01e001.gpkg",
-            ptd / "n01e001" / "n01e001.gpkg")])
+            tmp_path / "n01e001" / "n01e001.gpkg")])
     http404 = urllib.error.HTTPError("url", 404, "not found", None, None)
     uru.side_effect = http404
-    dl_usgs_dem_in_range(-1, 1, -1, 1, ptd)
+    dl_usgs_dem_in_range(-1, 1, -1, 1, tmp_path)
     # try to trigger OSError that is not ENOTEMPTY
 
     def side_effect(src_uri, out):
@@ -98,4 +98,4 @@ def test_dl_usgs_dem_in_range(uru, b, tmpdir):
         raise http404
     uru.side_effect = side_effect
     with pytest.raises(FileNotFoundError):
-        dl_usgs_dem_in_range(-1, 1, -1, 1, ptd)
+        dl_usgs_dem_in_range(-1, 1, -1, 1, tmp_path)

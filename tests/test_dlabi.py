@@ -13,7 +13,7 @@ def test_get_parser(ap):
 
 
 @patch("fogtools.processing.dlabi.get_parser", autospec=True)
-@patch("fogtools.abi.download_abi_day", autospec=True)
+@patch("fogtools.abi.download_abi_period", autospec=True)
 def test_main(fad, fpdg):
     import fogtools.processing.dlabi
     fpdg.return_value.parse_args.return_value.date = pandas.Timestamp(
@@ -22,4 +22,6 @@ def test_main(fad, fpdg):
     fpdg.return_value.parse_args.return_value.types = "CF"
     fogtools.processing.dlabi.main()
     fad.assert_called_once_with(
-            pandas.Timestamp("1900-01-01"), [1, 2, 3], "CF")
+            pandas.Timestamp("1900-01-01"),
+            pandas.Timestamp("1900-01-02"),
+            [1, 2, 3], "CF")

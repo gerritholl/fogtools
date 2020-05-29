@@ -14,12 +14,12 @@ def test_get_parser(ap):
 
 @patch("fogtools.analysis.fogrank.get_parser")
 @patch("fogtools.isd.read_db")
-def test_main(fir, gp, db):
+def test_main(fir, gp, gb_db):
     import fogtools.analysis.fogrank
     gp.return_value.parse_args.return_value.n = 5
     gp.return_value.parse_args.return_value.v = 1000
     gp.return_value.parse_args.return_value.f = "csv"
-    fir.return_value = db
+    fir.return_value = gb_db
     fogtools.analysis.fogrank.main()
     gp.return_value.parse_args.return_value.f = "markdown"
     fogtools.analysis.fogrank.main()
