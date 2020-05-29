@@ -606,7 +606,7 @@ class _ICON(_NWP):
         This will come from ICON.
         """
 
-        logger.info("Retrieving ICON from SKY for {timestamp:%Y-%m-%d %H:%M}")
+        logger.info(f"Retrieving ICON from SKY for {timestamp:%Y-%m-%d %H:%M}")
         period = sky.timestamp2period(timestamp)
         self._generated[timestamp] = sky.get_and_send(self.base, period)
 

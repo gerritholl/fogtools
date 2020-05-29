@@ -447,9 +447,11 @@ class TestABI:
 
 class TestICON:
     @unittest.mock.patch("fogtools.sky.get_and_send", autospec=True)
-    def test_store(self, fsg, icon, ts, tmp_path):
+    def test_store(self, fsg, icon, ts, tmp_path, caplog):
         fsg.return_value = [tmp_path / "pear"]
-        icon.store(ts)
+        with caplog.at_level(logging.INFO):
+            icon.store(ts)
+            assert "Retrieving ICON from SKY for 1900-01-01 00:00" in caplog.text
         assert icon._generated[ts] == [tmp_path / "pear"]
 
     # concrete methods from parent class
