@@ -451,7 +451,8 @@ class TestICON:
         fsg.return_value = [tmp_path / "pear"]
         with caplog.at_level(logging.INFO):
             icon.store(ts)
-            assert "Retrieving ICON from SKY for 1900-01-01 00:00" in caplog.text
+            assert ("Retrieving ICON from SKY for 1900-01-01 00:00"
+                    in caplog.text)
         assert icon._generated[ts] == [tmp_path / "pear"]
 
     # concrete methods from parent class
