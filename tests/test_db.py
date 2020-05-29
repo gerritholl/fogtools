@@ -673,11 +673,9 @@ class TestSYNOP:
 
 
 class TestDEM:
-    # FIXME: This needs to mock a fake DEM file so it can run independently of
-    # the files actually being there.
-    def test_find(self, dem):
+    def test_find(self, dem, ts):
         import pkg_resources
-        p = dem.find(object(), complete=False)
+        p = dem.find(ts, complete=False)
         assert p == {pathlib.Path(pkg_resources.resource_filename(
             "fogpy", "data/DEM/new-england-500m.tif"))}
         dem.location = pathlib.Path("/file/not/found")
@@ -715,9 +713,17 @@ class TestDEM:
 
     @unittest.mock.patch("urllib.request.urlretrieve", autospec=True)
     @unittest.mock.patch("subprocess.run", autospec=True)
-    def test_load(self, sr, uru, dem, ts, tmp_path, fake_process):
-        sc = dem.load(ts)
-        assert {did.name for did in sc.keys()} == {"dem"}
+    @unittest.mock.patch("pkg_resources.resource_filename", autospec=True)
+    def test_load(self, pr, sr, uru, dem, ts, tmp_path,
+                  fake_process, fakearea, fakescene):
+        pr.return_value = str(tmp_path / "fakedem.tif")
+        fs = _mk_fakescene_realarea(
+            fakearea,
+            datetime.datetime(1899, 12, 31, 23, 55),
+            "image")
+        fs.save_dataset("image", str(tmp_path / "fakedem.tif"))
+        sc2 = dem.load(ts)
+        assert {did.name for did in sc2.keys()} == {"dem"}
         dem.location = pathlib.Path(tmp_path / "nodem.tif")
         with pytest.raises(ValueError):
             # will fail because files aren't there when mocking
