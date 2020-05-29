@@ -225,7 +225,7 @@ class _DB(abc.ABC):
             timestamp (Pandas.Timestamp): Time at which to collect.
             complete (Optional[bool]): Require completeness.
         """
-        raise NotImplementedError()
+        raise NotImplementedError()  # pragma: no cover
 
     def ensure(self, timestamp):
         logger.debug(f"Ensuring {self!s} is available")
@@ -555,9 +555,9 @@ class _ICON(_NWP):
                 period.start_time,
                 timestamp.hour - period.start_time.hour)
         if fn not in exp:
-            raise ValueError(
-                    f"I would expect filename {fn!s}, but I'm told "
-                    f"to expect only {','.join([str(f) for f in exp])!s}")
+            raise RuntimeError("Impossible")  # pragma: no cover
+            # "I would expect filename {fn!s}, but I'm told "
+            # "to expect only {','.join([str(f) for f in exp])!s}")
         if complete and not fn.exists():
             return set()
         else:

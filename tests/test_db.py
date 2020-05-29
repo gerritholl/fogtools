@@ -75,6 +75,12 @@ def fakescene():
             dims=("color_a", "color_b"),
             attrs={"name": "cloudberry_pal",
                    "start_time": st_tm})
+    sc["maroshki"] = xarray.DataArray(
+            numpy.arange(25).reshape(5, 5),
+            dims=("xx", "yy"),
+            attrs={"name": "maroshki",
+                   "area": unittest.mock.MagicMock(),
+                   "start_time": st_tm})
     sc["banana"] = xarray.DataArray(
             numpy.arange(25).reshape(1, 5, 5),
             dims=("t", "x", "y"),
@@ -342,6 +348,8 @@ class TestABI:
             abi.find(ts + pandas.Timedelta(12, "minutes"), complete=True)
         with pytest.raises(fogtools.db.FogDBError):
             abi.find(ts, complete=True)
+        with pytest.raises(NotImplementedError):
+            abi.find(ts, complete=False)
 
     @unittest.mock.patch("s3fs.S3FileSystem", autospec=True)
     def test_store(self, sS, abi, monkeypatch):
@@ -422,6 +430,7 @@ class TestABI:
         with caplog.at_level(logging.DEBUG):
             df = abi.extract(ts, numpy.array([10, 10]), numpy.array([10, 15]))
             assert "Not extracting from cloudberry_pal" in caplog.text
+            assert "Not extracting from maroshki" in caplog.text
         numpy.testing.assert_array_equal(
                 df.columns,
                 ["raspberry", "cloudberry", "banana"])
@@ -492,6 +501,12 @@ class TestICON:
 class TestNWCSAF:
     def test_init(self, nwcsaf):
         assert isinstance(nwcsaf.base, pathlib.Path)
+
+    def test_badinit(self, monkeypatch):
+        import fogtools.db
+        monkeypatch.delenv("SAFNWC")
+        with pytest.raises(fogtools.db.FogDBError):
+            fogtools.db._NWCSAF()
 
     def test_store(self, nwcsaf, ts):
         nwcsaf.ensure_deps = unittest.mock.MagicMock()
@@ -658,21 +673,25 @@ class TestSYNOP:
 
 
 class TestDEM:
+    # FIXME: This needs to mock a fake DEM file so it can run independently of
+    # the files actually being there.
     def test_find(self, dem):
         import pkg_resources
         p = dem.find(object(), complete=False)
         assert p == {pathlib.Path(pkg_resources.resource_filename(
             "fogpy", "data/DEM/new-england-500m.tif"))}
+        dem.location = pathlib.Path("/file/not/found")
+        assert dem.find(pandas.Timestamp("1900"), complete=True) == set()
 
     @unittest.mock.patch("urllib.request.urlretrieve", autospec=True)
     @unittest.mock.patch("subprocess.run", autospec=True)
     @unittest.mock.patch("tempfile.NamedTemporaryFile", autospec=True)
-    def test_store(self, tN, sr, uru, dem, tmp_path):
+    def test_store(self, tN, sr, uru, dem, tmp_path, ts):
         dem.location = tmp_path / "fake.tif"
         mtf = tmp_path / "raspberry"
         tN.return_value.__enter__.return_value.name = str(
                 tmp_path / "raspberry")
-        dem.store(object())
+        dem.store(ts)
         assert sr.call_count == 2
         c1 = unittest.mock.call(
                 ["gdal_merge.py", "-o", str(mtf)] +
@@ -694,15 +713,22 @@ class TestDEM:
         with pytest.raises(NotImplementedError):
             dem.store(object())
 
-    def test_load(self, dem):
+    @unittest.mock.patch("urllib.request.urlretrieve", autospec=True)
+    @unittest.mock.patch("subprocess.run", autospec=True)
+    def test_load(self, sr, uru, dem, ts, tmp_path, fake_process):
         sc = dem.load(ts)
         assert {did.name for did in sc.keys()} == {"dem"}
+        dem.location = pathlib.Path(tmp_path / "nodem.tif")
+        with pytest.raises(ValueError):
+            # will fail because files aren't there when mocking
+            dem.load(ts)
 
 
 class TestFog:
     def test_find(self, fog, ts):
         p = fog.find(ts, complete=False)
         assert p == {fog.base / "fog-19000101-0000.tif"}
+        assert fog.find(pandas.Timestamp("2050-03-04"), complete=True) == set()
 
     @unittest.mock.patch("satpy.Scene")
     def test_store(self, sS, fog, abi, ts):
