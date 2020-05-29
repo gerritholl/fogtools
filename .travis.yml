@@ -17,7 +17,7 @@ nstall:
   - pip install git+https://github.com/pytroll/fogpy.git
   - pip install git+https://github.com/atmtools/typhon.git
   - pip install git+https://github.com/gerritholl/sattools.git
-  - pip install git+https://github.com/gerritholl/satpy.git
+  - pip install git+https://github.com/pytroll/satpy.git
   - pip install --no-deps -e .
 script:
   - $MAIN_CMD $SETUP_CMD
