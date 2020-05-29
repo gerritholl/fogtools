@@ -1,6 +1,7 @@
 """Test the build-db script
 """
 
+import pathlib
 from unittest.mock import patch
 
 import pandas
@@ -23,3 +24,5 @@ def test_main(fdF, fpbp, tmp_path):
     fogtools.processing.build_db.main()
     fdF.return_value.extend.assert_called_with(
             pandas.Timestamp("198508131515"))
+    fdF.return_value.store.assert_called_with(
+            pathlib.Path("/no/out/file"))

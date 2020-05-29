@@ -46,3 +46,4 @@ def main():
         log.addHandler(h)
     fogdb = db.FogDB()
     fogdb.extend(p.date)
+    fogdb.store(p.out)

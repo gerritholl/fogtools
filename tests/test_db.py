@@ -277,6 +277,7 @@ def test_store(db, fake_df, tmp_path):
         db.store(tmp_path / "nope.parquet")
     db.data = fake_df
     db.store(tmp_path / "yes.parquet")
+    assert (tmp_path / "yes.parquet").exists()
 
 
 class TestABI:
