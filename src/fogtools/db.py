@@ -37,7 +37,7 @@ class FogDBError(Exception):
 
 
 class FogDB:
-    """Database of fog cases
+    """Database of fog cases.
 
     Database of fog cases with ground measurements, satellite measurement,
     fogpy retrievals, and auxiliary measurements.  This database may serve for
@@ -49,61 +49,30 @@ class FogDB:
     documented at
     https://ninjoservices.dwd.de/wiki/display/SATMET/Nebeldatenbank .
 
-    It intends to contain:
+    It currently gathers:
 
       - synop
-      - metar
-      - swis
-      - satellite data (SEVIRI / ABI)
-      - model data (COSMO / ...)
-      - cloud microphysics (CMSAF / NWCSAF / ABI-L2 / ...)
+      - satellite data (ABI)
+      - model data (ICON)
+      - cloud microphysics (NWCSAF)
       - fogpy-calculated outputs such as fog
       - products calculated from DEM
 
-    Originally this was written out as csv, shapefiles, geotiff, and
-    npy files.  This class will likely write it out as a `pandas.DataFrame`.
-    I imagine that there will be subclasses implementing methods depending on
-    whether the data are for SEVIRI/Germany or ABI/USA.
+    It is planned to add:
 
+      - metar
+      - swis
+      - more satellite data (SEVIRI, FCI)
+      - more model data (IFS, COSMO, ...)
+      - more cloud microphysics data (NWCSAF, ABI-L2)
 
+    Data are written out as a parquet file.
     """
 
-    # There are different methods called get_x here, but there are two
-    # different aims for getting data.  One is adding to the fog database,
-    # the other # is gathering the inputs needed to calculate the fog.
-    # Should not confuse the two, however they overlap.  Maybe one should
-    # be called prepare?  Or maybe the whole functionality should be split
-    # in different classes?
-    #
-    # What is to be done:
-    #
-    # - prepare input data for running fogpy
-    #   - if already there (where?) take from cache
-    # - run fogpy
-    #   - if already run for date, take from cache
-    #       - use trollsift + yaml for config?
-    # - gather the results + other data
-    # - process this and build the database
-    # - needs a framework for getting location of cached data etc
-    #   - for each of sat, nwp, dem, nwcsaf, synop, ...:
-    #       - get path where cached
-    #       - check if already stored there
-    #       - if not, generate:
-    #           - for each input, perform step above
-    #           - possibly add symlink
-    #           - store in cache
-    #       - select reference pixels
-    #       - add to database
-    #
-    # Should each sub-db have its own Scene object or should they all share
-    # one, coordinate by the overall FogDB?  Probably easier to merge the Scene
-    # objects later, as the Scene object wants to know upon instantiation
-    # already the readers and filenames involved.
-    #
     # A lot of this could be done in parallel, perhaps they should all return
     # awaitables?  Much of the data gathering is I/O bound *or* coming from a
     # subprocess.  Only the fogpy fog calculation is CPU bound.  Consider using
-    # asyncio and coroutines:
+    # concurrent.futures:
     #
     # - ICON stuff is slow (wait for sky tape)
     # - ABI stuff is slow (download from AWS)
@@ -111,16 +80,15 @@ class FogDB:
     # - loading synop and DEM is probably fast enough
     # - calculating fog is CPU bound and depends on other stuff being there
     #
-    # so the most sense to do synchranously is downloading ABI and ICON.  The
+    # so the most sense to do synchronously is downloading ABI and ICON.  The
     # NWCSAF software already monitors for files to appear and runs in the
     # background "naturally", so the procedure should be to asynchronously
     # download ICON and ABI data to the right place, then wait for NWCSAF
-    # files to appear.  Where does asyncio come in exactly?
+    # files to appear.  Where does concurrent.futures come in exactly?
 
     # TODO:
     #   - use concurrent.futures (but try linear/serial first)
-    #   - collect results
-    #   - add results to database
+    #   - add other datasets
 
     sat = nwp = cmic = ground = dem = fog = data = None
 
@@ -145,8 +113,8 @@ class FogDB:
         ground station measurements, then uses the lats and lons
 
         Args:
-            timestamp (pandas.Timestamp): Time for which to add data to
-            database
+            timestamp (pandas.Timestamp):
+                Time for which to add data to database
         """
 
         # first get the ground stations: these determine which points I want to
@@ -164,8 +132,6 @@ class FogDB:
         demdata = self.dem.extract(timestamp, lats, lons)
         # FIXME: with concurrent.futures, wait for cmic and dem to be finished
         fogdata = self.fog.extract(timestamp, lats, lons)
-        # FIXME: rename some fields?
-        # FIXME: this needs a tolerance on the time, perhaps lat/lon too
         logger.info("Collected all fogdb components, putting it all together")
         df = _concat_mi_df_with_date(
                 satdata,
@@ -180,7 +146,12 @@ class FogDB:
             self.data = pandas.concat([self.data, df], axis=0)
 
     def store(self, f):
-        """Store database to file
+        """Store database to file.
+
+        Store database to a parquet file.
+
+        Args:
+            f (pathlib.Path or str): output file
         """
         if self.data is None:
             raise ValueError("No entries in database!")
@@ -209,27 +180,16 @@ def _concat_mi_df_with_date(df1, **dfs):
 
 
 class _DB(abc.ABC):
-    """Get/cache/store/... DB content for quantity
-    """
+    """Get/cache/store/... DB content for quantity.
 
-    # - needs a framework for getting location of cached data etc
-    #   - for each of sat, nwp, dem, nwcsaf, synop, ...:
-    #       - get path where cached
-    #       - check if already stored there
-    #       - if not, generate:
-    #           - for each input, perform step above
-    #           - possibly add symlink
-    #           - store in cache
-    #       - select reference pixels
-    #
-    # Do I really need a different subclass for each type of content?  Or will
-    # instances suffice?  Reading the content is going to be different for
-    # each.  Which parts can be fully in common?  Who creates the instances?
+    Abstract class to do various operations such as get, cache, extract, store,
+    etc. on a particular category of data within the database.  See the source
+    code for examples of various implementations.
+    """
 
     dependencies = None
     base = None
     _data = None
-    _generated = None  # dictionary keeping track of data files per timestamp
 
     @property
     @abc.abstractmethod
@@ -242,11 +202,16 @@ class _DB(abc.ABC):
         raise NotImplementedError()  # pragma: no cover
 
     def __init__(self, dependencies=None):
+        """Initialise DB object.
+
+        Args:
+            dependencies: Collection[DB instances]
+                DB objects for which data must be collected first.
+        """
         logger.debug(f"Initialising {self!s}")
         self.dependencies = dependencies if dependencies else {}
         self.base = sattools.io.get_cache_dir(subdir="fogtools") / "fogdb"
         self._data = {}
-        self._generated = {}
 
     @abc.abstractmethod
     def find(self, timestamp, complete=False):
@@ -530,7 +495,7 @@ class _ABI(_Sat):
         # particular time within [T, T+delta_T], whether the rest of delta_T is
         # spent on F, C, M1, or M2 doesn't matter, does it?  That means the end
         # time is not relevant?
-        self._generated[timestamp] = abi.download_abi_period(
+        abi.download_abi_period(
                 timestamp-pandas.Timedelta(65, "minutes"),
                 timestamp+pandas.Timedelta(5, "minutes"),
                 tps="F",
@@ -608,14 +573,24 @@ class _ICON(_NWP):
 
         logger.info(f"Retrieving ICON from SKY for {timestamp:%Y-%m-%d %H:%M}")
         period = sky.timestamp2period(timestamp)
-        self._generated[timestamp] = sky.get_and_send(self.base, period)
+        sky.get_and_send(self.base, period)
 
 
 class _CMIC(_DB):
+    """Parent class for any cloud microphysics-related functionality.
+
+    Currently empty, but if there are mulitple sources perhaps some
+    functionality will be shared.
+    """
     pass
 
 
 class _NWCSAF(_CMIC):
+    """Class for handling NWCSAF output.
+
+    Expects that the SAFNWC environment variable is set for correct
+    functioning.  See NWCSAF software documentation.
+    """
     reader = "nwcsaf-geo"
     name = "NWCSAF-GEO"
 
@@ -636,7 +611,7 @@ class _NWCSAF(_CMIC):
             missing_ok=True).get("nwcsaf-geo", set())
 
     def store(self, timestamp):
-        """Store NWCSAF output
+        """Store NWCSAF output.
 
         The NWCSAF output is generated using the SAFNWC software.  Whenever the
         software is running and the dependencies are present in the right
@@ -660,7 +635,7 @@ class _NWCSAF(_CMIC):
 
     @staticmethod
     def is_running():
-        """Check whether the NWCSAF software is running
+        """Check whether the NWCSAF software is running.
 
         Using the task manager, check whether the NWCSAF software is running.
         Return True if it is or False otherwise.  Raises CalledProcessError if
@@ -688,7 +663,7 @@ class _NWCSAF(_CMIC):
         return True
 
     def start_running(self):
-        """Run NWCSAF software
+        """Run NWCSAF software.
 
         Start running the NWCSAF software.  As this takes a moment to get
         started, users might want to run this module using
@@ -701,7 +676,7 @@ class _NWCSAF(_CMIC):
         return subprocess.run(["SAFNWCTM"], check=True)
 
     def _get_dep_loc(self, dep):
-        """Find location from where dependency should be symlinked
+        """Find location from where dependency should be symlinked.
 
         The SAFNWC software expects input data to be in a particular directory,
         but the data may be elsewhere.  This method determines where
@@ -717,6 +692,11 @@ class _NWCSAF(_CMIC):
                             f"{type(dep)!s}")
 
     def link(self, dep, timestamp):
+        """Link NWCSAF dependency.
+
+        Data generated for a dependency is probably not where NWCSAF wants it.
+        Add symlinks so that NWCSAF can find it.
+        """
         logger.debug("Linking NWCSAF dependenices")
         link_dsts = dep.find(timestamp, complete=True)
         link_src_dir = self._get_dep_loc(dep)
@@ -729,7 +709,7 @@ class _NWCSAF(_CMIC):
                 logger.warning(f"Src already exists: {src!s}")
 
     def wait_for_output(self, timestamp, timeout=600):
-        """Wait for SAFNWC outputs
+        """Wait for SAFNWC outputs.
 
         With the SAFNWC code running, wait until the results are there.
         """
@@ -757,10 +737,16 @@ class _NWCSAF(_CMIC):
 
 
 class _Ground(_DB):
+    """Base class for any ground-based datasets.
+
+    Currently empty.
+    """
     pass
 
 
 class _SYNOP(_Ground):
+    """Base class for handling data from the Integrated Surface Dataset (ISD).
+    """
     reader = None  # cannot be read with Satpy
     name = "SYNOP/ISD"
 
@@ -774,7 +760,7 @@ class _SYNOP(_Ground):
     _db = None
 
     def load(self, timestamp, tol=pandas.Timedelta("30m")):
-        """Get ground based measurements from Integrated Surface Dataset
+        """Get ground based measurements from Integrated Surface Dataset.
 
         Return ground based measurements from the Integrated Surface Dataset
         (ISD) for timestamp within tolerance.
@@ -800,10 +786,14 @@ class _SYNOP(_Ground):
         return self._db.loc[timestamp-tol:timestamp+tol]
 
     def store(self, _):
+        """Create ISD database locally.  See isd module.
+        """
         isd.create_db()
 
 
 class _DEM(_DB):
+    """Class for handling digital elevation model data.
+    """
     reader = "generic_image"
     name = "DEM"
 
@@ -811,7 +801,7 @@ class _DEM(_DB):
     location = None
 
     def __init__(self, region):
-        """Initialise DEM class
+        """Initialise DEM class.
 
         Initialise class to provide DEM information to database.
 
@@ -826,6 +816,7 @@ class _DEM(_DB):
                         f"etc/composites/{self._regions[region]:s}.yaml"),
                     "r"),
                 Loader=yaml.loader.UnsafeLoader)
+        self.region = region
         self.location = pathlib.Path(pkg_resources.resource_filename(
                 "fogpy",
                 D["composites"]["_intermediate_fls_day"]["path_dem"]))
@@ -837,7 +828,11 @@ class _DEM(_DB):
             return {self.location}
 
     def store(self, _):
-        if self.location == self.dem_new_england:
+        """Download DEM for New England.
+
+        Uses `dem` module.
+        """
+        if self.region == "new-england":
             logger.info("Downloading DEMs")
             out_all = dem.dl_usgs_dem_in_range(38, 49, -82, -66,
                                                self.location.parent)
@@ -856,6 +851,10 @@ class _DEM(_DB):
                     check=True)
 
     def load(self, timestamp):
+        """Load Digital Elevation Model.
+
+        Loads it as a scene object with the dataset ``"dem"``.
+        """
         sc = super().load(timestamp)
         sc["dem"] = sc["image"]
         del sc["image"]
@@ -863,9 +862,10 @@ class _DEM(_DB):
 
 
 class _Fog(_DB):
-    """Gather fog outputs
+    """Gather fog outputs.
 
-    So far only for ABI / NWCSAF-GEO
+    Run fogpy to collect fog products.
+    So far implemented for ABI / NWCSAF-GEO.
     """
 
     reader = "generic_image"  # stored as geotiff

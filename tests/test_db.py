@@ -351,11 +351,6 @@ class TestABI:
                 st=pandas.Timestamp("1899-12-31T12"),
                 ed=pandas.Timestamp("1900-01-01T12"))
         t = pandas.Timestamp("1900-01-01T00")
-        exp_list = _gen_abi_dst(
-                abi,
-                cs={2, 3, 4},
-                st=pandas.Timestamp("1899-12-31T22:45"),
-                ed=pandas.Timestamp("1900-01-01T00:00"))
 
         def fk_get(src, dest):
             dest.parent.mkdir(exist_ok=True, parents=True)
@@ -367,7 +362,6 @@ class TestABI:
         sS.return_value.glob.side_effect = fk_glob
         sS.return_value.get.side_effect = fk_get
         abi.store(t)
-        assert set(abi._generated[t]) == {pathlib.Path(p) for p in exp_list}
         monkeypatch.setattr(fogtools.abi, "nwcsaf_abi_channels", {2, 3, 4})
         monkeypatch.setattr(fogtools.abi, "fogpy_abi_channels", {2, 3, 4})
         assert abi.find(t, complete=True)
@@ -453,7 +447,6 @@ class TestICON:
             icon.store(ts)
             assert ("Retrieving ICON from SKY for 1900-01-01 00:00"
                     in caplog.text)
-        assert icon._generated[ts] == [tmp_path / "pear"]
 
     # concrete methods from parent class
     def test_find(self, icon, ts):
@@ -675,7 +668,7 @@ class TestDEM:
     @unittest.mock.patch("subprocess.run", autospec=True)
     @unittest.mock.patch("tempfile.NamedTemporaryFile", autospec=True)
     def test_store(self, tN, sr, uru, dem, tmp_path):
-        dem.location = dem.dem_new_england = tmp_path / "fake.tif"
+        dem.location = tmp_path / "fake.tif"
         mtf = tmp_path / "raspberry"
         tN.return_value.__enter__.return_value.name = str(
                 tmp_path / "raspberry")
@@ -697,7 +690,7 @@ class TestDEM:
                  "-tr", "500", "500", str(mtf),
                  str(tmp_path / "fake.tif")], check=True)
         sr.assert_has_calls([c1, c2])
-        dem.location = dem.dem_europe = "fribbulus xax"
+        dem.region = "fribbulus xax"
         with pytest.raises(NotImplementedError):
             dem.store(object())
 
