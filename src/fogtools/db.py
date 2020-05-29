@@ -366,7 +366,8 @@ class _DB(abc.ABC):
             vals[da.attrs["name"]] = pandas.Series(
                     numpy.where(x.mask | y.mask, numpy.nan, extr),
                     index=pandas.MultiIndex.from_arrays(
-                        [pandas.Series(da.attrs["start_time"]).repeat(
+                        [pandas.Series(da.attrs["start_time"]
+                                       or pandas.Timestamp("NaT")).repeat(
                             lats.size),
                          lats, lons],
                         names=["DATE", "LATITUDE", "LONGITUDE"]))

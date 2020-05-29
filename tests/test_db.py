@@ -246,7 +246,7 @@ def test_extend(db, abi, icon, nwcsaf, fake_df, ts, caplog, fakearea):
     db.dem.load = unittest.mock.MagicMock()
     db.dem.load.return_value = _mk_fakescene_realarea(
             fakearea,
-            numpy.datetime64("NaT"),
+            None,
             "damson", "prune")
     db.fog.load = unittest.mock.MagicMock()
     db.fog.load.return_value = _mk_fakescene_realarea(
