@@ -716,7 +716,8 @@ class TestDEM:
     @unittest.mock.patch("pkg_resources.resource_filename", autospec=True)
     def test_load(self, pr, sr, uru, dem, ts, tmp_path,
                   fake_process, fakearea, fakescene):
-        pr.return_value = str(tmp_path / "fakedem.tif")
+        dem.location = tmp_path / "fakedem.tif"
+        pr.return_value = str(dem.location)
         fs = _mk_fakescene_realarea(
             fakearea,
             datetime.datetime(1899, 12, 31, 23, 55),
