@@ -698,6 +698,10 @@ class TestDEM:
         with pytest.raises(NotImplementedError):
             dem.store(object())
 
+    def test_load(self, dem):
+        sc = dem.load(ts)
+        assert {did.name for did in sc.keys()} == {"dem"}
+
 
 class TestFog:
     def test_find(self, fog, ts):
@@ -710,6 +714,16 @@ class TestFog:
         sS.return_value.resample.return_value.save_dataset\
           .assert_called_once_with(
                    "fls_day", str(fog.base / "fog-19000101-0000.tif"))
+
+    def test_load(self, fog, ts, fakearea):
+        fs = _mk_fakescene_realarea(
+            fakearea,
+            datetime.datetime(1899, 12, 31, 23, 55),
+            "foog")
+        fp = fog.find(ts).pop()
+        fs.save_dataset("foog", str(fp))
+        sc = fog.load(ts)
+        assert {did.name for did in sc.keys()} == {"fog"}
 
 
 def test_contact_mi_dfs():

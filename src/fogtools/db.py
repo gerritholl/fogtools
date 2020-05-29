@@ -855,6 +855,12 @@ class _DEM(_DB):
                      ntf.name, str(self.location)],
                     check=True)
 
+    def load(self, timestamp):
+        sc = super().load(timestamp)
+        sc["dem"] = sc["image"]
+        del sc["image"]
+        return sc
+
 
 class _Fog(_DB):
     """Gather fog outputs
@@ -882,6 +888,12 @@ class _Fog(_DB):
                 "new-england-500",
                 "overview")
         sc.save_dataset("fls_day", str(self.find(timestamp).pop()))
+
+    def load(self, timestamp):
+        sc = super().load(timestamp)
+        sc["fog"] = sc["image"]
+        del sc["image"]
+        return sc
 
 
 # TODO: _IFS, _COSMO, _METAR, _SWIS, _SEVIRI
