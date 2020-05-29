@@ -737,10 +737,10 @@ class TestFog:
         assert p == {fog.base / "fog-19000101-0000.tif"}
         assert fog.find(pandas.Timestamp("2050-03-04"), complete=True) == set()
 
-    @unittest.mock.patch("satpy.Scene")
-    def test_store(self, sS, fog, abi, ts):
+    @unittest.mock.patch("fogtools.core.get_fog")
+    def test_store(self, cg, fog, abi, ts):
         fog.store(ts)
-        sS.return_value.resample.return_value.save_dataset\
+        cg.return_value.save_dataset\
           .assert_called_once_with(
                    "fls_day", str(fog.base / "fog-19000101-0000.tif"))
 
