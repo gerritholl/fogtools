@@ -35,9 +35,10 @@ def get_parser():
 def print_fogs(top_n, vis, freq, form):
     """Display the most common fog time periods.
 
-    Display to stdout a table of the top_n time periods at which the largest number
-    of stations reported fog, as defined by reporting a visibility less than
-    vis, grouped by periods of period, reported in form form.
+    Display to stdout a table of the top_n time periods at which the
+    largest number of stations reported fog, as defined by reporting a
+    visibility less than vis, grouped by periods of period, reported in
+    form form.
 
     Args:
         top_n (int): Number to report.
