@@ -18,8 +18,7 @@ def test_get_parser(ap):
 
 @patch("fogtools.processing.show_fog.parse_cmdline", autospec=True)
 @patch("fogtools.vis.get_fog_blend_for_sat", autospec=True)
-@patch("fogpy.composites.Scene", autospec=True)
-def test_main(fcS, fvg, fpsp, tmp_path, xrda):
+def test_main(fvg, fpsp, tmp_path, xrda):
     import fogtools.processing.show_fog
     from satpy import Scene, DatasetID
     fpsp.return_value = fogtools.processing.show_fog.get_parser().parse_args(
@@ -54,16 +53,16 @@ def test_main(fcS, fvg, fpsp, tmp_path, xrda):
              "--cmsaf", "/no/nwcsaf/files",
              "-a", "fribbulus xax",
              "-i"])
-    fogtools.processing.show_fog.main()
-    fvg.return_value[0].save.assert_called_once_with(
+    with patch("satpy.Scene", autospec=True) as sS:
+        fogtools.processing.show_fog.main()
+        fvg.return_value[0].save.assert_called_once_with(
             str(tmp_path / "fog_blend.tif"))
-    fcS.return_value.save_datasets.assert_called_once_with(
-            writer="cf",
-            datasets={"a", "b"},
-            filename=str(tmp_path / "intermediates.nc"))
-    fvg.reset_mock()
-    fvg.return_value[0].reset_mock()
-    fcS.return_value.save_datasets.reset_mock()
+        sS.return_value.save_datasets.assert_called_once_with(
+                writer="cf",
+                datasets={"a", "b"},
+                filename=str(tmp_path / "intermediates.nc"))
+        fvg.reset_mock()
+        fvg.return_value[0].reset_mock()
     fpsp.return_value = fogtools.processing.show_fog.get_parser().parse_args(
             [str(tmp_path),
              "--seviri", "/no/sat/files",
