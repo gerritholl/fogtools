@@ -509,6 +509,7 @@ class TestNWCSAF:
             fogtools.db._NWCSAF()
 
     def test_store(self, nwcsaf, ts):
+        import fogtools.db
         nwcsaf.ensure_deps = unittest.mock.MagicMock()
         nwcsaf.is_running = unittest.mock.MagicMock()
         nwcsaf.start_running = unittest.mock.MagicMock()
@@ -518,6 +519,8 @@ class TestNWCSAF:
         nwcsaf.is_running.return_value = False
         nwcsaf.store(ts)
         nwcsaf.start_running.assert_called_once_with()
+        with pytest.raises(fogtools.db.FogDBError):
+            nwcsaf.store(pandas.Timestamp("2020-02-03T14:30"))
 
     @unittest.mock.patch("subprocess.run", autospec=True)
     def test_is_running(self, sr, nwcsaf, ts):

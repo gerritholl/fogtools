@@ -629,6 +629,9 @@ class _NWCSAF(_CMIC):
         # changes and # start processing automatically when satellite files
         # are added.
 
+        if timestamp > pandas.Timestamp("2019-04-23"):
+            raise FogDBError("ABI-NWCSAF newer than 2019-04-23 not "
+                             "supported, see fogtools#19")
         self.ensure_deps(timestamp)
         if not self.is_running():
             self.start_running()
