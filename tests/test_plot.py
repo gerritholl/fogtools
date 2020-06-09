@@ -13,7 +13,7 @@ def v(gb_db):
 
 @mock.patch("matplotlib.pyplot.subplots", autospec=True)
 @mock.patch("fogtools.plot.write_multi", autospec=True)
-@mock.patch("fogtools.isd.count_fogs_per_day", autospec=True)
+@mock.patch("fogtools.isd.count_fogs_per_time", autospec=True)
 @mock.patch("pathlib.Path", autospec=True)
 def test_plot_fog_freq(pP, fic, tpcw, mps, v):
     (f, a, vc) = (mock.MagicMock(), mock.MagicMock(), mock.MagicMock())

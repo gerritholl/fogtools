@@ -9,20 +9,20 @@ import pytest
 def test_get_parser(ap):
     import fogtools.analysis.fogrank
     fogtools.analysis.fogrank.get_parser()
-    assert ap.return_value.add_argument.call_count == 3
+    assert ap.return_value.add_argument.call_count == 4
 
 
-@patch("fogtools.analysis.fogrank.get_parser")
 @patch("fogtools.isd.read_db")
-def test_main(fir, gp, gb_db):
+def test_main(fir, gb_db):
     import fogtools.analysis.fogrank
-    gp.return_value.parse_args.return_value.n = 5
-    gp.return_value.parse_args.return_value.v = 1000
-    gp.return_value.parse_args.return_value.f = "csv"
+    fargp = fogtools.analysis.fogrank.get_parser().parse_args(
+            ["-n", "5", "-v", "1000", "-p", "D", "-f", "csv"])
     fir.return_value = gb_db
-    fogtools.analysis.fogrank.main()
-    gp.return_value.parse_args.return_value.f = "markdown"
-    fogtools.analysis.fogrank.main()
-    gp.return_value.parse_args.return_value.f = "invalid"
-    with pytest.raises(ValueError):
+    with patch("fogtools.analysis.fogrank.get_parser") as fafg:
+        fafg.return_value.parse_args.return_value = fargp
+        fogtools.analysis.fogrank.main()
+    fargp = fogtools.analysis.fogrank.get_parser().parse_args(
+            ["-n", "5", "-v", "1000", "-p", "D", "-f", "markdown"])
+    with patch("fogtools.analysis.fogrank.get_parser") as fafg:
+        fafg.return_value.parse_args.return_value = fargp
         fogtools.analysis.fogrank.main()
