@@ -17,6 +17,7 @@ import functools
 import collections
 import abc
 import pkg_resources
+import fogpy.utils
 
 import numpy
 import pandas
@@ -833,25 +834,13 @@ class _DEM(_DB):
     def store(self, _):
         """Download DEM for New England.
 
-        Uses `dem` module.
+        Uses `fogpy.utils` module.
         """
         if self.region == "new-england":
             logger.info("Downloading DEMs")
-            out_all = dem.dl_usgs_dem_in_range(38, 49, -82, -66,
-                                               self.location.parent)
+            fogpy.utils.dl_dem(self.location)
         else:
             raise NotImplementedError("Can only download New England DEM")
-        with tempfile.NamedTemporaryFile() as ntf:
-            logger.info("Merging DEMs")
-            subprocess.run(["gdal_merge.py", "-o", ntf.name] +
-                           [str(p) for p in out_all],
-                           check=True)
-            subprocess.run(
-                    ["gdalwarp", "-r", "bilinear", "-t_srs", "+proj=eqc "
-                     "+lat_ts=0 +lat_0=0 +lon_0=0 +x_0=0 +y_0=0 +ellps=WGS84 "
-                     "+units=m +no_defs +type=crs", "-tr", "500", "500",
-                     ntf.name, str(self.location)],
-                    check=True)
 
     def load(self, timestamp):
         """Load Digital Elevation Model.
