@@ -684,43 +684,20 @@ class TestDEM:
         dem.location = pathlib.Path("/file/not/found")
         assert dem.find(pandas.Timestamp("1900"), complete=True) == set()
 
-    @unittest.mock.patch("urllib.request.urlretrieve", autospec=True)
-    @unittest.mock.patch("subprocess.run", autospec=True)
-    @unittest.mock.patch("tempfile.NamedTemporaryFile", autospec=True)
-    def test_store(self, tN, sr, uru, dem, tmp_path, ts):
+    @unittest.mock.patch("requests.get", autospec=True)
+    def test_store(self, rg, dem, tmp_path, ts):
         dem.location = tmp_path / "fake.tif"
-        mtf = tmp_path / "raspberry"
-        tN.return_value.__enter__.return_value.name = str(
-                tmp_path / "raspberry")
+        rg.return_value.content = b"abcd"
         dem.store(ts)
-        assert sr.call_count == 2
-        c1 = unittest.mock.call(
-                ["gdal_merge.py", "-o", str(mtf)] +
-                [str(mtf.parent / f"n{lat:>02d}w{lon:>03d}" /
-                     (("" if ext == "gpkg" else "USGS_1_") +
-                         f"n{lat:>02d}w{lon:>03d}.{ext:s}"))
-                    for lat in range(38, 49)
-                    for lon in range(82, 66, -1)
-                    for ext in ["tif", "jpg", "xml", "gpkg"]],
-                check=True)
-        c2 = unittest.mock.call(
-                ["gdalwarp", "-r", "bilinear", "-t_srs",
-                 "+proj=eqc +lat_ts=0 +lat_0=0 +lon_0=0 +x_0=0 +y_0=0 "
-                 "+ellps=WGS84 +units=m +no_defs +type=crs",
-                 "-tr", "500", "500", str(mtf),
-                 str(tmp_path / "fake.tif")], check=True)
-        sr.assert_has_calls([c1, c2])
+        rg.assert_called_once_with("https://zenodo.org/record/3885398/files/fake.tif")
         dem.region = "fribbulus xax"
         with pytest.raises(NotImplementedError):
             dem.store(object())
 
-    @unittest.mock.patch("urllib.request.urlretrieve", autospec=True)
-    @unittest.mock.patch("subprocess.run", autospec=True)
-    @unittest.mock.patch("pkg_resources.resource_filename", autospec=True)
-    def test_load(self, pr, sr, uru, dem, ts, tmp_path,
+    @unittest.mock.patch("requests.get", autospec=True)
+    def test_load(self, rq, dem, ts, tmp_path,
                   fake_process, fakearea, fakescene):
         dem.location = tmp_path / "fakedem.tif"
-        pr.return_value = str(dem.location)
         fs = _mk_fakescene_realarea(
             fakearea,
             datetime.datetime(1899, 12, 31, 23, 55),
@@ -728,10 +705,6 @@ class TestDEM:
         fs.save_dataset("image", str(tmp_path / "fakedem.tif"))
         sc2 = dem.load(ts)
         assert {did.name for did in sc2.keys()} == {"dem"}
-        dem.location = pathlib.Path(tmp_path / "nodem.tif")
-        with pytest.raises(ValueError):
-            # will fail because files aren't there when mocking
-            dem.load(ts)
 
 
 class TestFog:
