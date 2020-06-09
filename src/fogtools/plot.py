@@ -18,7 +18,7 @@ class Visualiser:
         logger.debug("Plotting fog frequency histograms")
         (f, a) = matplotlib.pyplot.subplots()
         for i in [250, 500, 750, 1000]:
-            cnt = isd.count_fogs_per_day(self.df, i)
+            cnt = isd.count_fogs_per_time(self.df, "D", i)
             vc = cnt.value_counts()
             # breakpoint()
             # need to compute before I can sort, but the value counts

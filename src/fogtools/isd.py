@@ -298,17 +298,24 @@ def read_db(f=None):
     return pandas.read_parquet(f)
 
 
-def count_fogs_per_day(df, max_vis=150):
-    """Count how many stations register fog per day
+def count_fogs_per_time(df, freq="D", max_vis=150):
+    """Count how many stations register fog per unit time.
 
     Based on a dataframe containing aggregated measurements such as returned
     by :func:`read_db`.
+
+    Args:
+
+        df (pandas.DataFrame): DataFrame including at least the fields DATE and
+                               vis.
+        freq (str or Offset): Frequency for which to count fogs.  "D" for
+                              daily, "H" for hourly.
     """
     if "vis" not in df.columns:
         df["vis"] = extract_vis(df)["vis"]
     lowvis = (df["vis"] < max_vis) & (df["vis"] > 0)
     sel = df[lowvis]
-    grouped = sel.groupby([sel["STATION"], sel["DATE"].dt.date])
+    grouped = sel.groupby([sel.STATION, sel.DATE.dt.floor(freq)])
     cnt_st_dt = grouped.size()
     cnt_dt = cnt_st_dt.groupby("DATE").size()
     return cnt_dt

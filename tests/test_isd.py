@@ -4,6 +4,7 @@ import math
 
 import pytest
 import numpy
+import numpy.testing
 import pandas
 from unittest import mock
 
@@ -170,12 +171,19 @@ def test_create_db(pc, pr, ss, stations, caplog):
 
 
 def test_count_fog(station, station_dask):
-    from fogtools.isd import count_fogs_per_day
-    cnt_dt = count_fogs_per_day(station, max_vis=500)
+    from fogtools.isd import count_fogs_per_time
+    cnt_dt = count_fogs_per_time(station, "D", max_vis=500)
     assert isinstance(cnt_dt, pandas.Series)
     assert len(cnt_dt) == 1
     assert cnt_dt[0] == 1
+    numpy.testing.assert_array_equal(
+            cnt_dt.index,
+            pandas.DatetimeIndex(["2019-01-05"]))
     import dask.dataframe as ddf
-    cnt_dk = count_fogs_per_day(station_dask, max_vis=500)
+    cnt_dk = count_fogs_per_time(station_dask, "D", max_vis=500)
     assert isinstance(cnt_dk, ddf.Series)
     assert cnt_dk.compute().equals(cnt_dt)
+    cnt_dt_h = count_fogs_per_time(station, "H", max_vis=500)
+    numpy.testing.assert_array_equal(
+            cnt_dt_h.index,
+            pandas.DatetimeIndex(["2019-01-05T22"]))

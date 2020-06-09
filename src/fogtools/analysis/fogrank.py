@@ -21,6 +21,10 @@ def get_parser():
             default=1000, help="Max visibility in metre")
 
     parser.add_argument(
+            "-p", action="store", type=str,
+            default="D", help="Frequency (pandas freq. string) for grouping")
+
+    parser.add_argument(
             "-f", action="store", choices=["markdown", "csv"],
             default="markdown",
             help="How to present output")
@@ -28,18 +32,31 @@ def get_parser():
     return parser
 
 
-def print_fogs(n, v, f):
+def print_fogs(top_n, vis, freq, form):
+    """Display the most common fog time periods.
+
+    Display to stdout a table of the top_n time periods at which the
+    largest number of stations reported fog, as defined by reporting a
+    visibility less than vis, grouped by periods of period, reported in
+    form form.
+
+    Args:
+        top_n (int): Number to report.
+        vis (number): Max visibility to consider.
+        freq (str or Offset): Frequency to count fogs.
+        form (str): Form to write, can be "markdown" or "csv".
+    """
     df = isd.read_db()
-    cnt = isd.count_fogs_per_day(df, v)
-    selec = cnt.sort_values(ascending=False)[:n]
-    if f == "markdown":
+    cnt = isd.count_fogs_per_time(df, freq, vis)
+    selec = cnt.sort_values(ascending=False)[:top_n]
+    if form == "markdown":
         print(selec.to_markdown(), end="\n")
-    elif f == "csv":
+    elif form == "csv":
         print(selec.to_csv(), end="")
     else:
-        raise ValueError(f"Invalid format: {f:s}")
+        raise ValueError(f"Invalid format: {form:s}")
 
 
 def main():
     p = get_parser().parse_args()
-    print_fogs(p.n, p.v, p.f)
+    print_fogs(p.n, p.v, p.p, p.f)
