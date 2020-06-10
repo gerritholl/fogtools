@@ -6,11 +6,11 @@ import logging
 import itertools
 import functools
 import operator
-import pandas
-import pkg_resources
 import pathlib
 
-from sattools import io as stio
+import pandas
+import pkg_resources
+import appdirs
 
 LOG = logging.getLogger(__name__)
 
@@ -126,7 +126,7 @@ def get_station(year, id_):
     # preserve dtypes: https://github.com/pandas-dev/pandas/issues/31497
     # and https://github.com/pandas-dev/pandas/issues/29752
 
-    cachedir = stio.get_cache_dir(subdir="fogtools")
+    cachedir = pathlib.Path(appdirs.user_cache_dir("fogtools"))
     cachefile = (cachedir / str(year) / id_).with_suffix(".pkl")
     try:
         LOG.debug(f"Reading from cache: {cachefile!s}")
@@ -286,7 +286,7 @@ def create_db(f=None, start=pandas.Timestamp(2017, 1, 1),
 def get_db_location():
     """Get location for parquet DB
     """
-    cachedir = stio.get_cache_dir(subdir="fogtools")
+    cachedir = pathlib.Path(appdirs.user_cache_dir("fogtools"))
     return cachedir / "store.parquet"
 
 

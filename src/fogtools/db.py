@@ -25,10 +25,9 @@ import satpy
 import satpy.readers
 import yaml
 import yaml.loader
+import appdirs
 
-import sattools.io
-
-from . import abi, sky, isd, core, dem
+from . import abi, sky, isd, core
 
 logger = logging.getLogger(__name__)
 
@@ -211,7 +210,7 @@ class _DB(abc.ABC):
         """
         logger.debug(f"Initialising {self!s}")
         self.dependencies = dependencies if dependencies else {}
-        self.base = sattools.io.get_cache_dir(subdir="fogtools") / "fogdb"
+        self.base = pathlib.Path(appdirs.user_cache_dir("fogtools")) / "fogdb"
         self._data = {}
 
     @abc.abstractmethod

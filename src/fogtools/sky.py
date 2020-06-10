@@ -5,12 +5,11 @@ import pathlib
 import subprocess
 import logging
 import itertools
-import pandas
 
+import pandas
 import lxml.etree
 import lxml.builder
-
-from sattools import io as stio
+import appdirs
 
 logger = logging.getLogger(__name__)
 
@@ -137,8 +136,8 @@ class RequestBuilder:
         """
         fn_name = make_icon_nwcsaf_filename(
                         self.base, start_time, fs)
-        hitFile = stio.get_cache_dir(subdir="fogtools") / "ihits"
-        infoFile = stio.get_cache_dir(subdir="fogtools") / "info"
+        hitFile = pathlib.Path(appdirs.user_cache_dir("fogtools")) / "ihits"
+        infoFile = pathlib.Path(appdirs.user_cache_dir("fogtools")) / "info"
         ensure_parents_exist(fn_name, hitFile, infoFile)
         self.expected_output_files |= {fn_name, hitFile, infoFile}
         t = self.E.transfer(

@@ -5,8 +5,9 @@ Routines related to interacting with ABI, such as downloading from AWS.
 
 import logging
 import re
+import appdirs
+import pathlib
 
-from sattools import io as stio
 import s3fs
 import pandas
 import satpy.readers
@@ -125,7 +126,7 @@ def download_abi_period(
 
     Consider the period between start and end, and download any ABI data not
     already present in local cache.  Data will be downloaded to
-    ``sattools.get_cache_dir() / fogtools`` if basedir not given.
+    ``appdirs.user_cache_dir() / fogtools`` if basedir not given.
 
     Args:
         start (Timestamp)
@@ -138,7 +139,7 @@ def download_abi_period(
             String of types, defaults to "C" for "CONUS", can be "F" or "FC"
         basedir (str or path, optional)
             Root directory to which it will be downloaded, defaults to
-            ``sattools.get_cache_dir() / "fogtools"``.
+            ``appdirs.user_cache_dir() / "fogtools"``.
 
     Returns:
         List[pathlib.Path]
@@ -146,7 +147,7 @@ def download_abi_period(
     """
 
     fs = s3fs.S3FileSystem(anon=True)
-    cd = basedir or stio.get_cache_dir(subdir="fogtools")
+    cd = basedir or pathlib.Path(appdirs.user_cache_dir("fogtools"))
     L = []
     logger.info(f"Downloading ABI for {start:%Y-%m-%d %H:%M} -- "
                 f"{end:%Y-%m-%d %H:%M}")
