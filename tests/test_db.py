@@ -697,7 +697,8 @@ class TestDEM:
         dem.location = tmp_path / "fake.tif"
         rg.return_value.content = b"abcd"
         dem.store(ts)
-        rg.assert_called_once_with("https://zenodo.org/record/3885398/files/fake.tif")
+        rg.assert_called_once_with("https://zenodo.org/record/"
+                                   "3885398/files/fake.tif")
         dem.region = "fribbulus xax"
         with pytest.raises(NotImplementedError):
             dem.store(object())
