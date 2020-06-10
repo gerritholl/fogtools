@@ -46,9 +46,7 @@ def print_fogs(top_n, vis, freq, form):
         freq (str or Offset): Frequency to count fogs.
         form (str): Form to write, can be "markdown" or "csv".
     """
-    df = isd.read_db()
-    cnt = isd.count_fogs_per_time(df, freq, vis)
-    selec = cnt.sort_values(ascending=False)[:top_n]
+    selec = isd.top_n(freq, vis, top_n)
     if form == "markdown":
         print(selec.to_markdown(), end="\n")
     elif form == "csv":

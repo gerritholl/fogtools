@@ -319,3 +319,22 @@ def count_fogs_per_time(df, freq="D", max_vis=150):
     cnt_st_dt = grouped.size()
     cnt_dt = cnt_st_dt.groupby("DATE").size()
     return cnt_dt
+
+
+def top_n(freq, max_vis, n):
+    """Get top N dates with counts.
+
+    Get the N dates on which the largest number of stations report fog
+    according to the criterion in max_vis, sorted descendingly, along with
+    the count for each day.
+
+    Args:
+        freq (str or Offset): Frequency with which to count fogs.
+        max_vis (number): Max visibility.
+        n (int): How many to select
+    """
+
+    df = read_db()
+    cnt = count_fogs_per_time(df, freq, max_vis)
+    selec = cnt.sort_values(ascending=False)[:n]
+    return selec
