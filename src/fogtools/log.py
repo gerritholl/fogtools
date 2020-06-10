@@ -71,12 +71,11 @@ class LogToTimeFile(LoggingContext):
         logfile = logdir / f"{now:%Y-%m-%d}" / f"fogdb-{time:%Y%m%d-%H%M}.log"
         logfile.parent.mkdir(parents=True, exist_ok=True)
         self.logfile = logfile
-        logger = logging.getLogger()  # root handler
         handler = logging.FileHandler(logfile, encoding="utf-8")
         handler.setLevel(logging.DEBUG)
         formatter = logging.Formatter(
-                "{asctime:s} {levelname:s} {processName:s}-{process:d} "
-                "{threadName:s}-{thread:d} "
+                "{asctime:s} {name:s} {levelname:s} "
+                "{processName:s}-{process:d} {threadName:s}-{thread:d} "
                 "{pathname:s}:{lineno:d} {funcName:s}: {message:s}",
                 style="{")
         handler.setFormatter(formatter)
