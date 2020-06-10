@@ -12,6 +12,7 @@ import pytest
 import xarray
 import satpy
 import datetime
+import appdirs
 
 
 # TODO:
@@ -276,6 +277,13 @@ def test_extend(db, abi, icon, nwcsaf, fake_df, ts, caplog, fakearea):
     assert db.data.shape == (5, 16)
     db.extend(ts)
     assert db.data.shape == (10, 16)
+    # check that messages were logged where we expect them
+    f = (pathlib.Path(appdirs.user_log_dir("fogtools")) /
+         f"{datetime.datetime.now():%Y-%m-%d}" / "fogdb-19000101-0000.log")
+    with open(f, mode="r", encoding="utf-8") as fp:
+        text = fp.read()
+        assert text.split("\n")[0].endswith(f"Opening logfile at {f!s}")
+        assert "Loading data for" in text
 
 
 def test_store(db, fake_df, tmp_path):
