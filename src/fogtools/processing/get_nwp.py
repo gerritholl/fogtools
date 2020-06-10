@@ -2,11 +2,12 @@
 """
 
 import os
-import logging
 import sys
 import argparse
 import pandas
+
 from .. import sky
+from .. import log
 
 
 def get_parser():
@@ -31,12 +32,5 @@ def getnwp(dt):
 
 def main():
     p = get_parser().parse_args()
-    h = logging.StreamHandler(sys.stderr)
-    h.setFormatter(logging.Formatter(
-        "%(levelname)-8s %(name)s %(asctime)s "
-        "%(module)s.%(funcName)s:%(lineno)s: %(message)s"))
-    for m in ("fogtools", "typhon"):
-        log = logging.getLogger(m)
-        log.setLevel(logging.DEBUG)
-        log.addHandler(h)
+    log.setup_main_handler()
     getnwp(p.date)

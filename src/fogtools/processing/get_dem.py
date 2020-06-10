@@ -3,11 +3,10 @@
 
 
 import pathlib
-import logging
-import sys
 import argparse
 
 from .. import dem
+from .. import log
 
 
 def get_parser():
@@ -37,12 +36,5 @@ def get_parser():
 
 def main():
     p = get_parser().parse_args()
-    h = logging.StreamHandler(sys.stderr)
-    h.setFormatter(logging.Formatter(
-        "%(levelname)-8s %(name)s %(asctime)s "
-        "%(module)s.%(funcName)s:%(lineno)s: %(message)s"))
-    for m in ("fogtools", "typhon"):
-        log = logging.getLogger(m)
-        log.setLevel(logging.DEBUG)
-        log.addHandler(h)
+    log.setup_main_handler()
     dem.dl_usgs_dem_in_range(*p.latrange, *p.lonrange, p.outdir)

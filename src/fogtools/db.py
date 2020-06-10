@@ -27,7 +27,7 @@ import yaml
 import yaml.loader
 import appdirs
 
-from . import abi, sky, isd, core
+from . import abi, sky, isd, core, log
 
 logger = logging.getLogger(__name__)
 
@@ -117,33 +117,37 @@ class FogDB:
                 Time for which to add data to database
         """
 
-        # first get the ground stations: these determine which points I want to
-        # extract
-        logger.info(f"Loading data for {timestamp:%Y-%m-%d %H:%M:%S}")
-        synop = self.ground.load(timestamp)
-        lats = synop.index.get_level_values("LATITUDE")
-        lons = synop.index.get_level_values("LONGITUDE")
-        # FIXME: use concurrent.futures here
-        # extract will also call .load thus taking care of dependencies
-        satdata = self.sat.extract(timestamp, lats, lons)
-        nwpdata = self.nwp.extract(timestamp, lats, lons)
-        # FIXME: with concurrent.futures, wait for sat and nwp to be finished
-        cmicdata = self.cmic.extract(timestamp, lats, lons)
-        demdata = self.dem.extract(timestamp, lats, lons)
-        # FIXME: with concurrent.futures, wait for cmic and dem to be finished
-        fogdata = self.fog.extract(timestamp, lats, lons)
-        logger.info("Collected all fogdb components, putting it all together")
-        df = _concat_mi_df_with_date(
-                satdata,
-                synop=synop,
-                nwp=nwpdata,
-                cmic=cmicdata,
-                dem=demdata,
-                fog=fogdata)
-        if self.data is None:
-            self.data = df
-        else:
-            self.data = pandas.concat([self.data, df], axis=0)
+        with log.LogToTimeFile(timestamp):
+            # first get the ground stations: these determine which points I
+            # want to # extract
+            logger.info(f"Loading data for {timestamp:%Y-%m-%d %H:%M:%S}")
+            synop = self.ground.load(timestamp)
+            lats = synop.index.get_level_values("LATITUDE")
+            lons = synop.index.get_level_values("LONGITUDE")
+            # FIXME: use concurrent.futures here
+            # extract will also call .load thus taking care of dependencies
+            satdata = self.sat.extract(timestamp, lats, lons)
+            nwpdata = self.nwp.extract(timestamp, lats, lons)
+            # FIXME: with concurrent.futures, wait for sat and nwp to be
+            # finished
+            cmicdata = self.cmic.extract(timestamp, lats, lons)
+            demdata = self.dem.extract(timestamp, lats, lons)
+            # FIXME: with concurrent.futures, wait for cmic and dem to be
+            # finished
+            fogdata = self.fog.extract(timestamp, lats, lons)
+            logger.info("Collected all fogdb components, "
+                        "putting it all together")
+            df = _concat_mi_df_with_date(
+                    satdata,
+                    synop=synop,
+                    nwp=nwpdata,
+                    cmic=cmicdata,
+                    dem=demdata,
+                    fog=fogdata)
+            if self.data is None:
+                self.data = df
+            else:
+                self.data = pandas.concat([self.data, df], axis=0)
 
     def store(self, f):
         """Store database to file.
