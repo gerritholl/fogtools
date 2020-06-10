@@ -9,6 +9,7 @@ import argparse
 import pandas
 from .. import db
 from .. import log
+from .. import isd
 
 
 def get_parser():
@@ -26,6 +27,16 @@ def get_parser():
             help="Add these datetimes to fog database.  Any format "
                  "understood by pandas.Timestamp is understood.")
 
+    parser.add_argument(
+            "--top-n", action="store", type=int,
+            help="Process the top n cases automatically.  If "
+                 "given, date will be ignored.")
+
+    parser.add_argument(
+            "--max-vis", action="store", type=float,
+            help="Max. vis to consider fog (when searching with top-n)",
+            default=1000)
+
     return parser
 
 
@@ -37,5 +48,10 @@ def main():
     p = parse_cmdline()
     log.setup_main_handler()
     fogdb = db.FogDB()
-    fogdb.extend(p.date)
+    if p.top_n is not None:
+        top = isd.top_n("H", 1000, p.top_n)
+        for dt in top.index:
+            fogdb.extend(dt)
+    else:
+        fogdb.extend(p.date)
     fogdb.store(p.out)
