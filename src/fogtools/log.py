@@ -72,14 +72,14 @@ class LogToTimeFile(LoggingContext):
         logfile.parent.mkdir(parents=True, exist_ok=True)
         self.logfile = logfile
         handler = logging.FileHandler(logfile, encoding="utf-8")
+        handler.setLevel(logging.DEBUG)
         formatter = logging.Formatter(
                 "{asctime:s} {levelname:s} {processName:s}-{process:d} "
                 "{threadName:s}-{thread:d} "
                 "{pathname:s}:{lineno:d} {funcName:s}: {message:s}",
                 style="{")
         handler.setFormatter(formatter)
-        super().__init__(logger, level=logging.DEBUG, handler=handler,
-                         close=True)
+        super().__init__(logger, handler=handler, close=True)
 
     def __enter__(self):
         super().__enter__()
