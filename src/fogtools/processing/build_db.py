@@ -5,7 +5,6 @@ Build the fog dabatase.  Currently functional for ABI only.
 
 import pathlib
 import argparse
-import sys
 
 import pandas
 from .. import db

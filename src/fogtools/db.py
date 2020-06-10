@@ -118,8 +118,8 @@ class FogDB:
         """
 
         with log.LogToTimeFile(timestamp):
-            # first get the ground stations: these determine which points I want to
-            # extract
+            # first get the ground stations: these determine which points I
+            # want to # extract
             logger.info(f"Loading data for {timestamp:%Y-%m-%d %H:%M:%S}")
             synop = self.ground.load(timestamp)
             lats = synop.index.get_level_values("LATITUDE")
@@ -128,12 +128,15 @@ class FogDB:
             # extract will also call .load thus taking care of dependencies
             satdata = self.sat.extract(timestamp, lats, lons)
             nwpdata = self.nwp.extract(timestamp, lats, lons)
-            # FIXME: with concurrent.futures, wait for sat and nwp to be finished
+            # FIXME: with concurrent.futures, wait for sat and nwp to be
+            # finished
             cmicdata = self.cmic.extract(timestamp, lats, lons)
             demdata = self.dem.extract(timestamp, lats, lons)
-            # FIXME: with concurrent.futures, wait for cmic and dem to be finished
+            # FIXME: with concurrent.futures, wait for cmic and dem to be
+            # finished
             fogdata = self.fog.extract(timestamp, lats, lons)
-            logger.info("Collected all fogdb components, putting it all together")
+            logger.info("Collected all fogdb components, "
+                        "putting it all together")
             df = _concat_mi_df_with_date(
                     satdata,
                     synop=synop,

@@ -1,7 +1,6 @@
 """For downloading ABI
 """
 
-import sys
 import argparse
 import pandas
 

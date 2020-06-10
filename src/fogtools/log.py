@@ -9,6 +9,7 @@ import appdirs
 
 logger = logging.getLogger(__name__)
 
+
 def setup_main_handler(
         mods=("fogtools", "typhon", "fogpy", "sattools", "fcitools"),
         level=logging.DEBUG):
@@ -30,7 +31,8 @@ def setup_main_handler(
         log.addHandler(handler)
 
 
-# this class is based on https://docs.python.org/3.10/howto/logging-cookbook.html#using-a-context-manager-for-selective-logging
+# this class is based on
+# https://docs.python.org/3.10/howto/logging-cookbook.html#using-a-context-manager-for-selective-logging  # noqa: E501
 class LoggingContext:
     def __init__(self, logger, level=None, handler=None, close=True):
         self.logger = logger
@@ -74,7 +76,7 @@ class LogToTimeFile(LoggingContext):
                 "{asctime:s} {levelname:s} {processName:s}-{process:d} "
                 "{threadName:s}-{thread:d} "
                 "{pathname:s}:{lineno:d} {funcName:s}: {message:s}",
-            style="{")
+                style="{")
         handler.setFormatter(formatter)
         super().__init__(logger, level=logging.DEBUG, handler=handler,
                          close=True)
