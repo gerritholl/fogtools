@@ -71,6 +71,7 @@ class LogToTimeFile(LoggingContext):
         logfile = logdir / f"{now:%Y-%m-%d}" / f"fogdb-{time:%Y%m%d-%H%M}.log"
         logfile.parent.mkdir(parents=True, exist_ok=True)
         self.logfile = logfile
+        logger = logging.getLogger()  # root handler
         handler = logging.FileHandler(logfile, encoding="utf-8")
         handler.setLevel(logging.DEBUG)
         formatter = logging.Formatter(
@@ -79,11 +80,12 @@ class LogToTimeFile(LoggingContext):
                 "{pathname:s}:{lineno:d} {funcName:s}: {message:s}",
                 style="{")
         handler.setFormatter(formatter)
-        super().__init__(logger, handler=handler, close=True)
+        super().__init__(logger, level=logging.DEBUG, handler=handler, close=True)
 
     def __enter__(self):
         super().__enter__()
         logger.info(f"Opening logfile at {self.logfile!s}")
+        return self
 
     def __exit__(self, et, ev, tb):
         logger.info(f"Closing logfile at {self.logfile!s}")
