@@ -106,49 +106,61 @@ class FogDB:
         getattr(self, k)  # will trigger AttributeError if not found
         super().__setattr__(k, v)
 
-    def extend(self, timestamp):
-        """Add data from <timestamp> to database
+    def extend(self, timestamp, onerror="raise"):
+        """Add data from <timestamp> to database.
 
         This module extends the database, creatig it if it doesn't exist yet,
         with measurements for the time indicated by <timestamp>.  It calculates
-        ground station measurements, then uses the lats and lons
+        ground station measurements, then uses the lats and lons.
 
         Args:
             timestamp (pandas.Timestamp):
                 Time for which to add data to database
+            onerror (str):
+                What to do on error: "raise" or "log"
         """
 
         with log.LogToTimeFile(timestamp):
-            # first get the ground stations: these determine which points I
-            # want to # extract
-            logger.info(f"Loading data for {timestamp:%Y-%m-%d %H:%M:%S}")
-            synop = self.ground.load(timestamp)
-            lats = synop.index.get_level_values("LATITUDE")
-            lons = synop.index.get_level_values("LONGITUDE")
-            # FIXME: use concurrent.futures here
-            # extract will also call .load thus taking care of dependencies
-            satdata = self.sat.extract(timestamp, lats, lons)
-            nwpdata = self.nwp.extract(timestamp, lats, lons)
-            # FIXME: with concurrent.futures, wait for sat and nwp to be
-            # finished
-            cmicdata = self.cmic.extract(timestamp, lats, lons)
-            demdata = self.dem.extract(timestamp, lats, lons)
-            # FIXME: with concurrent.futures, wait for cmic and dem to be
-            # finished
-            fogdata = self.fog.extract(timestamp, lats, lons)
-            logger.info("Collected all fogdb components, "
-                        "putting it all together")
-            df = _concat_mi_df_with_date(
-                    satdata,
-                    synop=synop,
-                    nwp=nwpdata,
-                    cmic=cmicdata,
-                    dem=demdata,
-                    fog=fogdata)
-            if self.data is None:
-                self.data = df
-            else:
-                self.data = pandas.concat([self.data, df], axis=0)
+            try:
+                # first get the ground stations: these determine which points I
+                # want to # extract
+                logger.info(f"Loading data for {timestamp:%Y-%m-%d %H:%M:%S}")
+                synop = self.ground.load(timestamp)
+                lats = synop.index.get_level_values("LATITUDE")
+                lons = synop.index.get_level_values("LONGITUDE")
+                # FIXME: use concurrent.futures here
+                # extract will also call .load thus taking care of dependencies
+                satdata = self.sat.extract(timestamp, lats, lons)
+                nwpdata = self.nwp.extract(timestamp, lats, lons)
+                # FIXME: with concurrent.futures, wait for sat and nwp to be
+                # finished
+                cmicdata = self.cmic.extract(timestamp, lats, lons)
+                demdata = self.dem.extract(timestamp, lats, lons)
+                # FIXME: with concurrent.futures, wait for cmic and dem to be
+                # finished
+                fogdata = self.fog.extract(timestamp, lats, lons)
+                logger.info("Collected all fogdb components, "
+                            "putting it all together")
+                df = _concat_mi_df_with_date(
+                        satdata,
+                        synop=synop,
+                        nwp=nwpdata,
+                        cmic=cmicdata,
+                        dem=demdata,
+                        fog=fogdata)
+                if self.data is None:
+                    self.data = df
+                else:
+                    self.data = pandas.concat([self.data, df], axis=0)
+            except FogDBError:
+                if onerror == "raise":
+                    raise
+                elif onerror == "log":
+                    logger.exception("Failed to extend database with data "
+                                     f"from {timestamp:%Y-%m-%d %H:%M:%S})")
+                else:
+                    raise ValueError("Unknown error handling option: "
+                                     f"{onerror!s}")
 
     def store(self, f):
         """Store database to file.

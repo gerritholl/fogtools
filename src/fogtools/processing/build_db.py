@@ -51,7 +51,7 @@ def main():
     if p.top_n is not None:
         top = isd.top_n("H", 1000, p.top_n)
         for dt in top.index:
-            fogdb.extend(dt)
+            fogdb.extend(dt, onerror="log")
     else:
         fogdb.extend(p.date)
     fogdb.store(p.out)

@@ -33,6 +33,6 @@ def test_main(fdF, fpbp, station, tmp_path):
         fir.return_value = station
         fogtools.processing.build_db.main()
     fdF.return_value.extend.assert_called_with(
-            pandas.Timestamp("201901052200"))
+            pandas.Timestamp("201901052200"), onerror="log")
     fdF.return_value.store.assert_called_with(
             pathlib.Path("/no/out/file"))
