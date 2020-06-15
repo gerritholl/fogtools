@@ -74,12 +74,13 @@ class LogToTimeFile(LoggingContext):
         handler = logging.FileHandler(logfile, encoding="utf-8")
         handler.setLevel(logging.DEBUG)
         formatter = logging.Formatter(
-                "{asctime:s} {name:>25s} {levelname:>6s} "
-                "{processName:>12s}-{process:<6d} {threadName:>12s}-{thread:<16d} "
-                "{pathname:>120s}:{lineno:<5d} {funcName:>35s}: {message:s}",
+                "{asctime:s} {name:s} {levelname:s} "
+                "{processName:s}-{process:d} {threadName:s}-{thread:d} "
+                "{pathname:s}:{lineno:d} {funcName:s}: {message:s}",
                 style="{")
         handler.setFormatter(formatter)
-        super().__init__(logger, level=logging.DEBUG, handler=handler, close=True)
+        super().__init__(logger, level=logging.DEBUG, handler=handler,
+                         close=True)
 
     def __enter__(self):
         super().__enter__()
