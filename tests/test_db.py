@@ -614,10 +614,32 @@ class TestNWCSAF:
         nwcsaf.is_running.return_value = True
         nwcsaf.wait_for_output(t, timeout=20)
         assert tisl.call_count == 0
+        log = (nwcsaf.base / "export" / "LOG" / "S_NWC_LOG_GOES16_NEW_ENGLAND"
+               "_18991231T235110Z.log")
+        log.parent.mkdir(exist_ok=True)
         p.unlink()
+        # test case where logfile not found
         with pytest.raises(fogtools.db.FogDBError):
             nwcsaf.wait_for_output(t, timeout=20)
-        assert tisl.call_count == 2
+            # reached time.sleep
+            assert tisl.call_count == 2
+        tisl.reset_mock()
+        fp = log.open(mode="wt", encoding="ascii")
+        fp.write("Grand opening\n")
+        fp.flush()
+        with pytest.raises(fogtools.db.FogDBError):
+            # test case where logfile found, but without error text
+            nwcsaf.wait_for_output(t, timeout=20)
+            # reached time.sleep
+            assert tisl.call_count == 2
+        fp.write("Error opening\n")
+        fp.flush()
+        tisl.reset_mock()
+        with pytest.raises(fogtools.db.FogDBError):
+            # test case where logfile contains error text
+            nwcsaf.wait_for_output(t, timeout=20)
+            # did not reach time.sleep
+            assert tisl.call_count == 0
 
     def test_ensure(self, nwcsaf, ts, fake_process):
         nwcsaf.wait_for_output = unittest.mock.MagicMock()
@@ -641,7 +663,8 @@ class TestNWCSAF:
         with pytest.raises(FileNotFoundError):
             nwcsaf.find_log(ts)
         (logdir / "S_NWC_LOG_GOES16_SHADOWLANDS_18991231T235110Z.log").touch()
-        assert nwcsaf.find_log(ts) == logdir / "S_NWC_LOG_GOES16_SHADOWLANDS_18991231T235110Z.log"
+        assert (nwcsaf.find_log(ts) == logdir /
+                "S_NWC_LOG_GOES16_SHADOWLANDS_18991231T235110Z.log")
 
     # concrete methods from parent class
     def test_ensure_deps(self, nwcsaf, abi, icon, ts):
@@ -654,6 +677,7 @@ class TestNWCSAF:
         assert nwcsaf.link.call_count == 2
         nwcsaf.link.assert_any_call(abi, ts)
         nwcsaf.link.assert_any_call(icon, ts)
+
 
 class TestSYNOP:
     def test_find(self, synop, monkeypatch, tmp_path):

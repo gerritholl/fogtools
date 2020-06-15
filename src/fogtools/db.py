@@ -622,26 +622,30 @@ class _NWCSAF(_CMIC):
         file that has a start time in the past 15 minutes.
         """
 
-        # This is a bit tricky because the CMIC logfile file name format is not
-        # covered by anything any satpy reader reads, but there may be no
-        # NWCSAF CMIC output at this exact time, however I should be able to
-        # determine the exact time from the satellite file... perhaps easiest
-        # to just search "by hand"?  Or, can get starting time for satellite with
+        # This is a bit tricky because the CMIC logfile file name
+        # format is not covered by anything any satpy reader reads,
+        # but there may be no NWCSAF CMIC output at this exact time,
+        # however I should be able to determine the exact time
+        # from the satellite file... perhaps easiest to just search
+        # "by hand"?  Or, can get starting time for satellite with
         # satpy.readers.yaml_reader.FileYAMLReader.filename_items_for_filetype,
-        # or do that for all log files searching for one starting in the last
-        # 15 minutes?
+        # or do that for all log files searching for one starting in
+        # the last 15 minutes?
+
         before = timestamp - pandas.Timedelta(15, "minutes")
         logdir = self.base / "export" / "LOG"
         files = logdir.glob("S_NWC_LOG_*Z.log")
-        pat = "S_NWC_LOG_{platform_name:s}_{region:s}_{start_time:%Y%m%dT%H%M%S}Z.log"
-        f_with_info = satpy.readers.yaml_reader.FileYAMLReader.filename_items_for_filetype(
+        pat = ("S_NWC_LOG_{platform_name:s}_{region:s}_"
+               "{start_time:%Y%m%dT%H%M%S}Z.log")
+        f_with_info = satpy.readers.yaml_reader.FileYAMLReader.\
+            filename_items_for_filetype(
                 files,
                 {"file_patterns": [pat]})
         for (nm, info) in f_with_info:
             if before < info["start_time"] < timestamp:
                 return nm
         raise FileNotFoundError("Found no logfile that might cover "
-                "{timestamp:%Y-%m-%d %H:%M}")
+                                f"{timestamp:%Y-%m-%d %H:%M}")
 
     def store(self, timestamp):
         """Store NWCSAF output.
@@ -757,6 +761,18 @@ class _NWCSAF(_CMIC):
         while t < timeout:
             if self.find(timestamp, complete=True):
                 return
+            try:
+                logfile = self.find_log(timestamp)
+            except FileNotFoundError:
+                pass  # no logfile yet
+            else:
+                with open(logfile, "r") as fp:
+                    text = fp.read()
+                    if "Error opening" in text:
+                        raise FogDBError("NWCSAF apparently had an error "
+                                         "opening or reading satellite input "
+                                         f"files.  Please check {logfile!s} "
+                                         "for details.")
             time.sleep(10)
             t += 10
         else:

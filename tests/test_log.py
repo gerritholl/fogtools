@@ -5,7 +5,6 @@ import logging
 def test_log_context(tmp_path):
     import fogtools.log
     tm = datetime.datetime(1985, 8, 13, 15)
-    root = logging.getLogger()
     tofu = logging.getLogger("tofu")
     veggie = logging.getLogger("veggie")
     # substitute for stderr on other handler
