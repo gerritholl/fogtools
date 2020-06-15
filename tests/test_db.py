@@ -632,6 +632,17 @@ class TestNWCSAF:
         nwcsaf.ensure(ts)
         nwcsaf.start_running.assert_called_once_with()
 
+    def test_find_log(self, nwcsaf, ts, tmp_path):
+        nwcsaf.base = tmp_path
+        logdir = tmp_path / "export" / "LOG"
+        logdir.mkdir(parents=True)
+        (logdir / "S_NWC_LOG_GOES16_SHADOWLANDS_18991231T233610Z.log").touch()
+        (logdir / "S_NWC_LOG_GOES16_SHADOWLANDS_19000101T000610Z.log").touch()
+        with pytest.raises(FileNotFoundError):
+            nwcsaf.find_log(ts)
+        (logdir / "S_NWC_LOG_GOES16_SHADOWLANDS_18991231T235110Z.log").touch()
+        assert nwcsaf.find_log(ts) == logdir / "S_NWC_LOG_GOES16_SHADOWLANDS_18991231T235110Z.log"
+
     # concrete methods from parent class
     def test_ensure_deps(self, nwcsaf, abi, icon, ts):
         abi.ensure = unittest.mock.MagicMock()
@@ -643,7 +654,6 @@ class TestNWCSAF:
         assert nwcsaf.link.call_count == 2
         nwcsaf.link.assert_any_call(abi, ts)
         nwcsaf.link.assert_any_call(icon, ts)
-
 
 class TestSYNOP:
     def test_find(self, synop, monkeypatch, tmp_path):
