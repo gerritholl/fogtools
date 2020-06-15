@@ -284,6 +284,14 @@ def test_extend(db, abi, icon, nwcsaf, fake_df, ts, caplog, fakearea):
         text = fp.read()
         assert text.split("\n")[0].endswith(f"Opening logfile at {f!s}")
         assert "Loading data for" in text
+    db.sat.load.side_effect = fogtools.db.FogDBError
+    with pytest.raises(fogtools.db.FogDBError):
+        db.extend(ts, onerror="raise")
+    with caplog.at_level(logging.ERROR):
+        db.extend(ts, onerror="log")
+        assert "Failed to extend database with data from 1900" in caplog.text
+    with pytest.raises(ValueError):
+        db.extend(ts, onerror="semprini")
 
 
 def test_store(db, fake_df, tmp_path):
