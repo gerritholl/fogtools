@@ -157,7 +157,7 @@ class FogDB:
                     raise
                 elif onerror == "log":
                     logger.exception("Failed to extend database with data "
-                                     f"from {timestamp:%Y-%m-%d %H:%M:%S})")
+                                     f"from {timestamp:%Y-%m-%d %H:%M:%S}")
                 else:
                     raise ValueError("Unknown error handling option: "
                                      f"{onerror!s}")
