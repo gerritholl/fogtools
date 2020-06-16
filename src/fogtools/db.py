@@ -251,6 +251,12 @@ class _DB(abc.ABC):
                          f"{self!s} for {timestamp:%Y-%m-%d %H:%M}, "
                          "downloading / generating")
             self.store(timestamp)
+        if not self.find(timestamp, complete=True):
+            raise FogDBError("I tried to download or generate data for "
+                             f"{self!s} covering {timestamp:%Y-%m-%d %H:%M}, "
+                             "but it's still not there.  Somewhing may have "
+                             "gone wrong trying to download or generate the "
+                             "data.")
 
     def ensure_deps(self, timestamp):
         for (k, dep) in self.dependencies.items():

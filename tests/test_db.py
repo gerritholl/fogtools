@@ -425,16 +425,24 @@ class TestABI:
     # overwritten by _ABI or trivial (such as ensure_deps)
     @unittest.mock.patch("fogtools.abi.download_abi_period", autospec=True)
     def test_ensure(self, fad, abi, ts):
+        from fogtools.db import FogDBError
+        # without a side-effect it's not actually making any files, so test
+        # that first
+        with pytest.raises(FogDBError):
+            abi.ensure(ts)
+
+        def mk(*args, **kwargs):
+            self._mk(abi)
+        fad.side_effect = mk
         abi.ensure(ts)
-        fad.assert_called_once_with(
+        fad.assert_called_with(
                 ts - pandas.Timedelta(65, "minutes"),
                 ts + pandas.Timedelta(5, "minutes"),
                 tps="F",
                 basedir=pathlib.Path(abi.base))
-        self._mk(abi)
         abi.ensure(ts)
         # make sure it wasn't called again
-        fad.assert_called_once()
+        assert fad.call_count == 2
 
     def test_link(self, abi, ts):
         abi.link(None, None)  # this doesn't do anything
