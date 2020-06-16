@@ -254,7 +254,7 @@ class _DB(abc.ABC):
         if not self.find(timestamp, complete=True):
             raise FogDBError("I tried to download or generate data for "
                              f"{self!s} covering {timestamp:%Y-%m-%d %H:%M}, "
-                             "but it's still not there.  Somewhing may have "
+                             "but it's still not there.  Something may have "
                              "gone wrong trying to download or generate the "
                              "data.")
 
