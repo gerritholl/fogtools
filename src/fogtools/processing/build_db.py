@@ -49,7 +49,7 @@ def main():
     log.setup_main_handler()
     fogdb = db.FogDB()
     if p.top_n is not None:
-        top = isd.top_n("H", 1000, p.top_n)
+        top = isd.top_n("H", "D", 1000, 70, p.top_n)
         for dt in top.index:
             fogdb.extend(dt, onerror="log")
     else:

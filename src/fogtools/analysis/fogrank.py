@@ -25,6 +25,14 @@ def get_parser():
             default="D", help="Frequency (pandas freq. string) for grouping")
 
     parser.add_argument(
+            "-s", action="store", type=str,
+            default="D", help="Spacing, reporting at most one case per time")
+
+    parser.add_argument(
+            "-a", action="store", type=float,
+            default=70, help="Maximum solar zenith angle")
+
+    parser.add_argument(
             "-f", action="store", choices=["markdown", "csv"],
             default="markdown",
             help="How to present output")
@@ -32,7 +40,7 @@ def get_parser():
     return parser
 
 
-def print_fogs(top_n, vis, freq, form):
+def print_fogs(freq, spacing, max_vis, max_sza, top_n, form):
     """Display the most common fog time periods.
 
     Display to stdout a table of the top_n time periods at which the
@@ -41,12 +49,14 @@ def print_fogs(top_n, vis, freq, form):
     form form.
 
     Args:
-        top_n (int): Number to report.
-        vis (number): Max visibility to consider.
         freq (str or Offset): Frequency to count fogs.
+        spacing (str or Offset): Report at most one per this time.
+        max_vis (number): Max visibility to consider.
+        max_sza (number): Max solar zenith angle.
+        top_n (int): Number to report.
         form (str): Form to write, can be "markdown" or "csv".
     """
-    selec = isd.top_n(freq, vis, top_n)
+    selec = isd.top_n(freq, spacing, max_vis, max_sza, top_n)
     if form == "markdown":
         print(selec.to_markdown(), end="\n")
     elif form == "csv":
@@ -57,4 +67,4 @@ def print_fogs(top_n, vis, freq, form):
 
 def main():
     p = get_parser().parse_args()
-    print_fogs(p.n, p.v, p.p, p.f)
+    print_fogs(p.p, p.s, p.v, p.a, p.n, p.f)

@@ -11,6 +11,7 @@ import pathlib
 import pandas
 import pkg_resources
 import appdirs
+import pyorbital.astronomy
 
 LOG = logging.getLogger(__name__)
 
@@ -298,7 +299,7 @@ def read_db(f=None):
     return pandas.read_parquet(f)
 
 
-def count_fogs_per_time(df, freq="D", max_vis=150):
+def count_fogs_per_time(df, freq="D", min_spacing="D", max_vis=1000):
     """Count how many stations register fog per unit time.
 
     Based on a dataframe containing aggregated measurements such as returned
@@ -310,6 +311,12 @@ def count_fogs_per_time(df, freq="D", max_vis=150):
                                vis.
         freq (str or Offset): Frequency for which to count fogs.  "D" for
                               daily, "H" for hourly.
+        min_spacing (str or Offset): Select at most one per this amount of
+                                     time.  This is to prevent the top 10 hours
+                                     to be all from the same day.  Defaults to
+                                     "D", which means at most one instance per
+                                     day will be selected.
+        max_vis (number): Maximum visibility to consider not fog.
     """
     if "vis" not in df.columns:
         df["vis"] = extract_vis(df)["vis"]
@@ -318,10 +325,14 @@ def count_fogs_per_time(df, freq="D", max_vis=150):
     grouped = sel.groupby([sel.STATION, sel.DATE.dt.floor(freq)])
     cnt_st_dt = grouped.size()
     cnt_dt = cnt_st_dt.groupby("DATE").size()
-    return cnt_dt
+    # subselect per unit time
+    cnt_sub = cnt_dt[cnt_dt.groupby(
+        cnt_dt.index.floor(min_spacing)).idxmax()].sort_values(
+                ascending=False)
+    return cnt_sub
 
 
-def top_n(freq, max_vis, n):
+def top_n(freq, spacing, max_vis, max_sza, n):
     """Get top N dates with counts.
 
     Get the N dates on which the largest number of stations report fog
@@ -330,11 +341,16 @@ def top_n(freq, max_vis, n):
 
     Args:
         freq (str or Offset): Frequency with which to count fogs.
+        spacing (str or Offset): Report at most one per this time.
         max_vis (number): Max visibility.
+        max_sza (number): Max solar zenith angle.
         n (int): How many to select
     """
 
     df = read_db()
-    cnt = count_fogs_per_time(df, freq, max_vis)
+    df["sza"] = pyorbital.astronomy.sun_zenith_angle(
+            df["DATE"], df["LONGITUDE"], df["LATITUDE"])
+    df = df[df["sza"] < max_sza]
+    cnt = count_fogs_per_time(df, freq, spacing, max_vis)
     selec = cnt.sort_values(ascending=False)[:n]
     return selec
