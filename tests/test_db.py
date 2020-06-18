@@ -69,7 +69,7 @@ def fakescene():
             numpy.arange(25).reshape(5, 5),
             dims=("x", "y"),
             attrs={"area": unittest.mock.MagicMock(),
-                   "start_time": st_tm,
+                   "start_time": st_tm + datetime.timedelta(microseconds=1),
                    "name": "cloudberry"})
     sc["cloudberry_pal"] = xarray.DataArray(
             numpy.arange(25).reshape(5, 5),
@@ -137,14 +137,18 @@ def fake_df():
     # the peculiar way of getting lat/lon is to make sure it doesn't correlate
     # too much with the time, so that if selecting several adjecent series the
     # points are not close to each other, however I'm still avoiding randomness
-    # in unit tests
+    # in unit tests --- also include the situation that each lat/lon is
+    # occurring twice but with a a slightly different time
     df = pandas.DataFrame(
             {"DATE": (dr:=pandas.date_range(  # noqa: E231
                 "18991231T12", "19000101T12",
-                freq="15min")),
-             "LATITUDE": numpy.linspace(0, 10000, dr.size) % 180 - 90,
-             "LONGITUDE": numpy.linspace(0, 10000, dr.size) % 360 - 180,
-             "values": numpy.empty(shape=dr.size)}).sample(
+                freq="15min")).append(
+                    dr + pandas.Timedelta(1, "minute")).sort_values(),
+             "LATITUDE": numpy.linspace(0, 10000, dr.size).repeat(2)
+                % 180 - 90,
+             "LONGITUDE": numpy.linspace(0, 10000, dr.size).repeat(2)
+                % 360 - 180,
+             "values": numpy.empty(shape=dr.size*2)}).sample(
                      frac=1, random_state=42)
     return df.set_index(["DATE", "LATITUDE", "LONGITUDE"])
 
@@ -267,6 +271,9 @@ def test_extend(db, abi, icon, nwcsaf, fake_df, ts, caplog, fakearea):
     with caplog.at_level(logging.INFO):
         db.extend(ts)
         assert "Loading data for 1900-01-01 00:00:00" in caplog.text
+        # one of the duplicates is outside of the tolerance, so it repeats from
+        # 9 to 5 not from 10 to 5
+        assert "Reducing from 9 to 5 to avoid repeated lat/lons" in caplog.text
         # assert "Extracting data for [fogdb component ABI]
         # 1900-01-01 00:00:00" in caplog.text
     assert sorted(db.data.columns) == [
@@ -292,6 +299,12 @@ def test_extend(db, abi, icon, nwcsaf, fake_df, ts, caplog, fakearea):
         assert "Failed to extend database with data from 1900" in caplog.text
     with pytest.raises(ValueError):
         db.extend(ts, onerror="semprini")
+
+
+def test_closest_latlon(fake_df, ts, caplog):
+    import fogtools.db
+    new_df = fogtools.db.FogDB._select_closest_latlon(fake_df, ts)
+    assert new_df.shape[0] == fake_df.shape[0]//2
 
 
 def test_store(db, fake_df, tmp_path):
@@ -455,6 +468,7 @@ class TestABI:
             df = abi.extract(ts, numpy.array([10, 10]), numpy.array([10, 15]))
             assert "Not extracting from cloudberry_pal" in caplog.text
             assert "Not extracting from maroshki" in caplog.text
+            assert "Different datasets in scene have different" in caplog.text
         numpy.testing.assert_array_equal(
                 df.columns,
                 ["raspberry", "cloudberry", "banana"])
@@ -713,11 +727,11 @@ class TestSYNOP:
         fic.side_effect = fake_store
         sel = synop.load(ts, tol=pandas.Timedelta("31min"))
         fic.assert_called_once_with()
-        assert sel.shape == (5, 1)
+        assert sel.shape == (10, 1)
         assert sel.index.get_level_values("DATE")[0] == pandas.Timestamp(
                 "18991231T2330")
         assert sel.index.get_level_values("DATE")[-1] == pandas.Timestamp(
-                "19000101T0030")
+                "19000101T0031")
         assert sel.index.names == ["DATE", "LATITUDE", "LONGITUDE"]
         sel2 = synop.load(ts, tol=pandas.Timedelta("31min"))
         assert sel.equals(sel2)

@@ -126,8 +126,14 @@ class FogDB:
                 # want to # extract
                 logger.info(f"Loading data for {timestamp:%Y-%m-%d %H:%M:%S}")
                 synop = self.ground.load(timestamp)
+
+                # for each non-unique lat/lon, choose the time closest to
+                # /timestamp/
+                synop = self._select_closest_latlon(synop, timestamp)
+
                 lats = synop.index.get_level_values("LATITUDE")
                 lons = synop.index.get_level_values("LONGITUDE")
+
                 # FIXME: use concurrent.futures here
                 # extract will also call .load thus taking care of dependencies
                 satdata = self.sat.extract(timestamp, lats, lons)
@@ -174,6 +180,24 @@ class FogDB:
             raise ValueError("No entries in database!")
         logger.info(f"Storing fog database to {f!s}")
         self.data.to_parquet(f)
+
+    @staticmethod
+    def _select_closest_latlon(synop, timestamp):
+        """For repeated lat/lon, select row closest in time to timestamp.
+
+        When the dataframe in synop contains rows with identical lat/lons but
+        different timestamps, such as may occur when there are multiple synop
+        measurements within a certain time tolerance returned by Synop.load,
+        return a new dataframe where for each such row the row is selected
+        where the time is closest to timestamp.
+        """
+        tdiff = abs(synop.index.get_level_values("DATE") - timestamp)
+        ids = synop.assign(delta=tdiff).delta.groupby(
+                level=["LATITUDE", "LONGITUDE"]).idxmin()
+        logger.debug(f"Reducing from {synop.shape[0]:d} to "
+                     f"{ids.shape[0]:d} to avoid repeated lat/lons")
+        synop = synop.loc[ids]
+        return synop
 
 
 def _concat_mi_df_with_date(df1, **dfs):
@@ -323,6 +347,7 @@ class _DB(abc.ABC):
         # pandas.Float64Index results in a SystemError, see for more info
         # https://pytroll.slack.com/archives/C17CEU728/p1589903078309800 and
         # onward conversation
+        st_time = None
         for da in sc:
             nm = f"{da.attrs.get('name', getattr(da, 'name'))!s}"
             if "area" not in da.attrs:
@@ -351,11 +376,21 @@ class _DB(abc.ABC):
             extr = src[
                 numpy.where(x.mask, 0, y),
                 numpy.where(y.mask, 0, x)]
+            ths_sttime = da.attrs["start_time"] or pandas.Timestamp("NaT")
+            if st_time is None:
+                st_time = ths_sttime
+            elif (ths_sttime != st_time
+                  and pandas.notnull(ths_sttime)
+                  and pandas.notnull(st_time)):
+                logger.warning("Different datasets in scene have different "
+                               "start times: expected "
+                               f"{st_time:%Y-%m-%d %H:%M:%S.%f}, "
+                               f"got {ths_sttime:%Y-%m-%d %H:%M:%S.%f}")
+                ths_sttime = st_time
             vals[da.attrs["name"]] = pandas.Series(
                     numpy.where(x.mask | y.mask, numpy.nan, extr),
                     index=pandas.MultiIndex.from_arrays(
-                        [pandas.Series(da.attrs["start_time"]
-                                       or pandas.Timestamp("NaT")).repeat(
+                        [pandas.Series(ths_sttime).repeat(
                             lats.size),
                          lats, lons],
                         names=["DATE", "LATITUDE", "LONGITUDE"]))
