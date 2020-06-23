@@ -6,7 +6,7 @@ import pathlib
 import argparse
 
 from .. import dem
-from .. import log
+from sattools import log
 
 
 def get_parser():

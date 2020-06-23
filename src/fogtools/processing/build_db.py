@@ -8,7 +8,7 @@ import argparse
 
 import pandas
 from .. import db
-from .. import log
+from sattools import log
 from .. import isd
 
 
