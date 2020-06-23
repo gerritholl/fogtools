@@ -2,6 +2,7 @@ import datetime
 import logging
 import io
 
+import pytest
 import numpy.testing
 
 
@@ -54,6 +55,10 @@ bla Filter results for LowCloudFilter
     D = fogtools.log.collect_filterstats_from_log(io.StringIO(s))
     assert D["WaterCloudFilter"] == 1778
     assert D["LowCloudFilter"] == 4174
+    with pytest.raises(ValueError):
+        D = fogtools.log.collect_filterstats_from_log(io.StringIO(s+s))
+    with pytest.raises(ValueError):
+        D = fogtools.log.collect_filterstats_from_log(io.StringIO(s[:100]))
 
 
 def test_collect_filterstats_from_files(tmp_path):
