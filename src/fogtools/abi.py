@@ -116,7 +116,17 @@ def get_time_from_fn(fn):
 
 
 def _get_chan_from_name(nm):
-    return int(nm.split("/")[-1][19:21])
+    """Extract channel number from filename.
+
+    Given a ABI filename, extract the channel number.
+
+    Args:
+        nm (str): Filename / path to ABI file
+
+    Returns:
+        int: channel number
+    """
+    return int(nm.split("/")[-1].split("-")[3][3:5])
 
 
 def download_abi_period(
