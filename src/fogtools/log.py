@@ -1,6 +1,5 @@
 """Utilities related to logging."""
 
-import sys
 import logging
 import datetime
 import pathlib

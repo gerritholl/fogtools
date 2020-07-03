@@ -140,7 +140,7 @@ def fake_df():
     # in unit tests --- also include the situation that each lat/lon is
     # occurring twice but with a a slightly different time
     df = pandas.DataFrame(
-            {"DATE": (dr:=pandas.date_range(  # noqa: E231
+            {"DATE": (dr := pandas.date_range(
                 "18991231T12", "19000101T12",
                 freq="15min")).append(
                     dr + pandas.Timedelta(1, "minute")).sort_values(),
