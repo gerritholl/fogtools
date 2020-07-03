@@ -7,7 +7,7 @@ import argparse
 import pandas
 
 from .. import sky
-from .. import log
+from sattools import log
 
 
 def get_parser():

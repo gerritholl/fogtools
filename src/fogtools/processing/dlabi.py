@@ -5,7 +5,7 @@ import argparse
 import pandas
 
 from .. import abi
-from .. import log
+from sattools import log
 
 
 def get_parser():

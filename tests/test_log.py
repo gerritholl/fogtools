@@ -6,28 +6,15 @@ import pytest
 import numpy.testing
 
 
-def test_log_context(tmp_path):
+def test_log_context(tmp_path, monkeypatch):
     import fogtools.log
     tm = datetime.datetime(1985, 8, 13, 15)
-    tofu = logging.getLogger("tofu")
-    veggie = logging.getLogger("veggie")
-    # substitute for stderr on other handler
-    oh = logging.FileHandler(tmp_path / "test")
-    tofu.addHandler(oh)
+    monkeypatch.setenv("XDG_CACHE_DIR", str(tmp_path))
+    now = datetime.datetime.now()
     with fogtools.log.LogToTimeFile(tm) as c:
         # I want everything to be logged to the file
         f = c.logfile
-        tofu.debug("tofu")
-        veggie.debug("veggie")
-    with f.open("r") as fp:
-        text = fp.read()
-        assert "tofu" in text
-        assert "veggie" in text
-    # I want none of this to appear on stderr
-    with (tmp_path / "test").open("r") as fp:
-        text = fp.read()
-        assert "tofu" in text
-        assert "veggie" not in text
+        assert f.parent == tmp_path / "fogtools" / "log" / f"{now:%Y-%m-%d}"
 
 
 def test_collect_filterstats_from_log():
