@@ -92,3 +92,16 @@ def test_download_abi_period(sS, tmp_path, monkeypatch, caplog, listing):
         call("s3://" + listing[0],
              tmp_path / "fogtools" / "abi" / "2020" / "02" / "29" /
              "12" / "C10" / listing[0].split("/")[-1])])
+
+
+def test_get_chan_from_name():
+    from fogtools.abi import _get_chan_from_name
+    assert _get_chan_from_name(
+            "path/to/abi/OR_ABI-L1b-RadC-M6C16_G16_s20200600051143_"
+            "e20200600053529_c20200600054000.nc") == 16
+    assert _get_chan_from_name(
+            "OR_ABI-L1b-RadF-M6C05_G16_s20200600430175_e20200600439483_"
+            "c20200600439544.nc") == 5
+    assert _get_chan_from_name(
+            "subdir/OR_ABI-L1b-RadM1-M6C01_G16_s20200600809221_"
+            "e20200600809279_c20200600809328.nc") == 1
