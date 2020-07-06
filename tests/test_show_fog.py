@@ -20,7 +20,7 @@ def test_get_parser(ap):
 @patch("fogtools.vis.get_fog_blend_for_sat", autospec=True)
 def test_main(fvg, fpsp, tmp_path, xrda):
     import fogtools.processing.show_fog
-    from satpy import Scene, DatasetID
+    from satpy import Scene
     fpsp.return_value = fogtools.processing.show_fog.get_parser().parse_args(
             ["/no/out/file",
              "--seviri", "/no/sat/files",
@@ -29,10 +29,19 @@ def test_main(fvg, fpsp, tmp_path, xrda):
     m_im = MagicMock()
     m_sc = MagicMock()
     f_sc = Scene()
-    f_sc[DatasetID("raspberry")] = xrda[0]
-    f_sc[DatasetID("banana")] = xrda[1]
-    f_sc[DatasetID("fls_day_extra")] = xarray.Dataset(
-            {"a": xrda[0], "b": xrda[1]})
+    try:
+        from satpy.tests.utils import make_dsid
+    except ImportError:
+        from satpy import DatasetID
+        f_sc[DatasetID("raspberry")] = xrda[0]
+        f_sc[DatasetID("banana")] = xrda[1]
+        f_sc[DatasetID("fls_day_extra")] = xarray.Dataset(
+                {"a": xrda[0], "b": xrda[1]})
+    else:
+        f_sc[make_dsid(name="raspberry")] = xrda[0]
+        f_sc[make_dsid(name="banana")] = xrda[1]
+        f_sc[make_dsid(name="fls_day_extra")] = xarray.Dataset(
+                {"a": xrda[0], "b": xrda[1]})
     m_sc.__getitem__.side_effect = f_sc.__getitem__
     m_sc.keys.side_effect = f_sc.keys
     fvg.return_value = (m_im, m_sc)
