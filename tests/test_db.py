@@ -268,7 +268,7 @@ def test_extend(db, abi, icon, nwcsaf, fake_df, ts, caplog, fakearea):
     loc.parent.mkdir(parents=True)
     fake_df.to_parquet(fogtools.isd.get_db_location())
     db.ground.load(ts)
-    with caplog.at_level(logging.INFO):
+    with caplog.at_level(logging.DEBUG):
         db.extend(ts)
         assert "Loading data for 1900-01-01 00:00:00" in caplog.text
         # one of the duplicates is outside of the tolerance, so it repeats from
