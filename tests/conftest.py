@@ -68,6 +68,6 @@ def setUp(tmp_path_factory):
 @pytest.fixture
 def station():
     from fogtools.isd import dl_station
-    with unittest.mock.patch("s3fs.S3FileSystem", autospec=True) as s3:
-        s3.return_value.open.return_value = io.StringIO(csv_test_content)
+    with unittest.mock.patch("fsspec.open", autospec=True) as fo:
+        fo.return_value.open.return_value = io.StringIO(csv_test_content)
         return dl_station(2019, "94733099999")
