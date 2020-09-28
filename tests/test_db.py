@@ -230,6 +230,7 @@ def test_init(db):
     assert db.fog is not None
 
 
+@pytest.mark.xfail(pandas.__version__ < "1.1.3", reason="See pandas#36541")
 def test_extend(db, abi, icon, nwcsaf, fake_df, ts, caplog, fakearea):
     # TODO: rewrite test with less mocking
     #
@@ -268,7 +269,7 @@ def test_extend(db, abi, icon, nwcsaf, fake_df, ts, caplog, fakearea):
     loc.parent.mkdir(parents=True)
     fake_df.to_parquet(fogtools.isd.get_db_location())
     db.ground.load(ts)
-    with caplog.at_level(logging.INFO):
+    with caplog.at_level(logging.DEBUG):
         db.extend(ts)
         assert "Loading data for 1900-01-01 00:00:00" in caplog.text
         # one of the duplicates is outside of the tolerance, so it repeats from
@@ -777,7 +778,7 @@ class TestDEM:
             "image")
         fs.save_dataset("image", str(tmp_path / "fakedem.tif"))
         sc2 = dem.load(ts)
-        assert {did.name for did in sc2.keys()} == {"dem"}
+        assert {did["name"] for did in sc2.keys()} == {"dem"}
 
 
 class TestFog:
@@ -801,7 +802,7 @@ class TestFog:
         fp = fog.find(ts).pop()
         fs.save_dataset("foog", str(fp))
         sc = fog.load(ts)
-        assert {did.name for did in sc.keys()} == {"fog"}
+        assert {did["name"] for did in sc.keys()} == {"fog"}
 
 
 def test_contact_mi_dfs():
